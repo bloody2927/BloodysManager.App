@@ -1,11 +1,14 @@
-using System;
 using System.Globalization;
 using System.Windows.Data;
 
-namespace BloodysManager.App.Views.Converters;
-
-public sealed class InverseBoolConverter : IValueConverter
+namespace BloodysManager.App.Views.Converters
 {
-    public object Convert(object v, Type t, object p, CultureInfo c) => v is bool b ? !b : v;
-    public object ConvertBack(object v, Type t, object p, CultureInfo c) => throw new NotSupportedException();
+    public sealed class InverseBoolConverter : IValueConverter
+    {
+        public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+            => value is bool b ? !b : value;
+
+        public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+            => value is bool b ? !b : value;
+    }
 }

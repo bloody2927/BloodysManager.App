@@ -194,7 +194,7 @@
                 <ColumnDefinition Width="Auto"/>
               </Grid.ColumnDefinitions>
               <TextBlock Text="Pfad:" VerticalAlignment="Center" Margin="0,0,6,0"/>
-              <TextBox Grid.Column="1" Text="{Binding ActiveProfile.WorldExePath}" ToolTip="Leer = <Live>\\bin\\worldserver.exe" Margin="0,0,6,0"/>
+              <TextBox Grid.Column="1" Text="{Binding ActiveProfile.WorldExePath}" ToolTip="Leer = &lt;Live&gt;\\bin\\worldserver.exe" Margin="0,0,6,0"/>
               <StackPanel Grid.Column="2" Orientation="Horizontal">
                 <Button Content="…" Width="32" Command="{Binding CmdBrowseWorldExe}" ToolTip="EXE wählen"/>
                 <Button Content="Start" Margin="6,0,0,0" Padding="12,4" Command="{Binding CmdStartWorld}"
@@ -216,7 +216,7 @@
                 <ColumnDefinition Width="Auto"/>
               </Grid.ColumnDefinitions>
               <TextBlock Text="Pfad:" VerticalAlignment="Center" Margin="0,0,6,0"/>
-              <TextBox Grid.Column="1" Text="{Binding ActiveProfile.AuthExePath}" ToolTip="Leer = <Live>\\bin\\authserver.exe" Margin="0,0,6,0"/>
+              <TextBox Grid.Column="1" Text="{Binding ActiveProfile.AuthExePath}" ToolTip="Leer = &lt;Live&gt;\\bin\\authserver.exe" Margin="0,0,6,0"/>
               <StackPanel Grid.Column="2" Orientation="Horizontal">
                 <Button Content="…" Width="32" Command="{Binding CmdBrowseAuthExe}" ToolTip="EXE wählen"/>
                 <Button Content="Start" Margin="6,0,0,0" Padding="12,4" Command="{Binding CmdStartAuth}"
