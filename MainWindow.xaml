@@ -1,0 +1,101 @@
+<Window x:Class="BloodysManager.App.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:conv="clr-namespace:BloodysManager.App.Views.Converters"
+        Title="BloodysManager" Height="650" Width="980" WindowStartupLocation="CenterScreen">
+  <Window.Resources>
+    <conv:BoolToBrushConverter x:Key="BoolToBrush"/>
+    <Style x:Key="FrameBorder" TargetType="Border">
+      <Setter Property="BorderBrush" Value="Black"/>
+      <Setter Property="BorderThickness" Value="3"/>
+      <Setter Property="CornerRadius" Value="6"/>
+      <Setter Property="Padding" Value="12"/>
+      <Setter Property="Margin" Value="8"/>
+    </Style>
+  </Window.Resources>
+
+  <DockPanel>
+    <Menu DockPanel.Dock="Top">
+      <MenuItem Header="{Binding L[MenuFile]}">
+        <MenuItem Header="{Binding L[MenuSetPathDownload]}"     Command="{Binding CmdSetPathDownload}"/>
+        <MenuItem Header="{Binding L[MenuSetPathLive]}"         Command="{Binding CmdSetPathLive}"/>
+        <MenuItem Header="{Binding L[MenuSetPathCopy]}"         Command="{Binding CmdSetPathCopy}"/>
+        <MenuItem Header="{Binding L[MenuSetPathBackup]}"       Command="{Binding CmdSetPathBackup}"/>
+        <MenuItem Header="{Binding L[MenuSetPathBackupUpdate]}" Command="{Binding CmdSetPathBackupUpdate}"/>
+        <Separator/>
+        <MenuItem Header="{Binding L[MenuExit]}" Command="{Binding CmdExit}"/>
+      </MenuItem>
+
+      <MenuItem Header="{Binding L[MenuSettings]}">
+        <MenuItem Header="{Binding L[MenuLanguage]}">
+          <MenuItem Header="Deutsch" Command="{Binding CmdLangDE}"/>
+          <MenuItem Header="English" Command="{Binding CmdLangEN}"/>
+        </MenuItem>
+      </MenuItem>
+
+      <MenuItem Header="{Binding L[MenuCredits]}" Command="{Binding CmdOpenCredits}"/>
+    </Menu>
+
+    <ScrollViewer>
+      <StackPanel Margin="12">
+        <Border Style="{StaticResource FrameBorder}">
+          <StackPanel>
+            <TextBlock Text="{Binding AppTitle}" FontFamily="Consolas" FontSize="36"
+                       Foreground="#FFEE4B4B" FontWeight="Bold" HorizontalAlignment="Center" />
+            <Button Content="{Binding BtnCreateStruct}" Command="{Binding CmdCreateFolders}"
+                    Margin="0,16,0,0" Padding="10" HorizontalAlignment="Center" Width="280"/>
+          </StackPanel>
+        </Border>
+
+        <Border Style="{StaticResource FrameBorder}">
+          <Grid>
+            <Grid.RowDefinitions>
+              <RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/>
+            </Grid.RowDefinitions>
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition/><ColumnDefinition Width="36"/>
+            </Grid.ColumnDefinitions>
+
+            <TextBox Grid.Row="0" Text="{Binding PathDownload}" Margin="0,4,8,4" />
+            <Ellipse Grid.Row="0" Grid.Column="1" Width="24" Height="24"
+                     Fill="{Binding ExistsDownload, Converter={StaticResource BoolToBrush}}"/>
+
+            <TextBox Grid.Row="1" Text="{Binding PathLive}" Margin="0,4,8,4" />
+            <Ellipse Grid.Row="1" Grid.Column="1" Width="24" Height="24"
+                     Fill="{Binding ExistsLive, Converter={StaticResource BoolToBrush}}"/>
+
+            <TextBox Grid.Row="2" Text="{Binding PathCopy}" Margin="0,4,8,4" />
+            <Ellipse Grid.Row="2" Grid.Column="1" Width="24" Height="24"
+                     Fill="{Binding ExistsCopy, Converter={StaticResource BoolToBrush}}"/>
+
+            <TextBox Grid.Row="3" Text="{Binding PathBackup}" Margin="0,4,8,4" />
+            <Ellipse Grid.Row="3" Grid.Column="1" Width="24" Height="24"
+                     Fill="{Binding ExistsBackup, Converter={StaticResource BoolToBrush}}"/>
+
+            <TextBox Grid.Row="4" Text="{Binding PathBackupUpdate}" Margin="0,4,8,4" />
+            <Ellipse Grid.Row="4" Grid.Column="1" Width="24" Height="24"
+                     Fill="{Binding ExistsBackupUpdate, Converter={StaticResource BoolToBrush}}"/>
+          </Grid>
+        </Border>
+
+        <Border Style="{StaticResource FrameBorder}">
+          <UniformGrid Rows="2" Columns="4">
+            <Button Content="{Binding BtnClean}"        Background="#FFE3B341" Command="{Binding CmdCleanDownload}" />
+            <Button Content="{Binding BtnUpdate}"       Background="#FFE3B341" Command="{Binding CmdUpdate}" />
+            <Button Content="{Binding BtnCopy}"         Background="#FF58A55C" Command="{Binding CmdCopy}" />
+            <Button Content="{Binding BtnCurrent}"      Background="#FFE3B341" Command="{Binding CmdCurrent}" />
+            <Button Content="{Binding BtnDeleteLive}"   Background="#FFD9534F" Command="{Binding CmdDeleteLive}" />
+            <Button Content="{Binding BtnDeleteCopy}"   Background="#FFD9534F" Command="{Binding CmdDeleteCopy}" />
+            <Button Content="{Binding BtnRotate}"       Background="#FFE3B341" Command="{Binding CmdRotate}" />
+            <Button Content="{Binding BtnExit}"         Background="#FFB0B0B0" Command="{Binding CmdExit}" />
+          </UniformGrid>
+        </Border>
+
+        <Border Style="{StaticResource FrameBorder}">
+          <TextBox Text="{Binding Log}" FontFamily="Consolas" IsReadOnly="True"
+                   VerticalScrollBarVisibility="Auto" MinHeight="160"/>
+        </Border>
+      </StackPanel>
+    </ScrollViewer>
+  </DockPanel>
+</Window>
