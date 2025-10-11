@@ -1,6 +1,6 @@
 using System.IO;
 using System.IO.Compression;
-
+using System.Net.Http;
 
 namespace BloodysManager.App.Services;
 
@@ -65,8 +65,9 @@ public sealed class GitService
         Directory.CreateDirectory(temp);
         var zip = Path.Combine(temp, "repo.zip");
 
-        using (var wc = new System.Net.WebClient())
-            await wc.DownloadFileTaskAsync(new Uri(zipUrl), zip);
+        using var http = new HttpClient();
+        var data = await http.GetByteArrayAsync(zipUrl, ct);
+        await File.WriteAllBytesAsync(zip, data, ct);
 
         ZipFile.ExtractToDirectory(zip, temp);
         var extracted = Directory.EnumerateDirectories(temp)
