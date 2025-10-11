@@ -89,8 +89,8 @@ public sealed class MainViewModel : INotifyPropertyChanged
     string _log=""; public string Log { get=>_log; set=>Set(ref _log, value); }
     bool _busy; public bool IsBusy { get=>_busy; set=>Set(ref _busy, value); }
 
-    void Ok(string s)=>Log += $"[✓] {s}\n";
-    void Err(string s)=>Log+= $"[x] {s}\n";
+    void Ok(string s)=>Log += $"[{DateTime.Now:HH:mm:ss}] ✓ {s}\n";
+    void Err(string s)=>Log+= $"[{DateTime.Now:HH:mm:ss}] ✗ {s}\n";
 
     async Task Guard(Func<CancellationToken, Task> op)
     {

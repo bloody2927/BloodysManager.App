@@ -9,6 +9,12 @@
     <AssemblyName>BloodysManager</AssemblyName>
     <RootNamespace>BloodysManager.App</RootNamespace>
     <Platforms>AnyCPU;x64</Platforms>
+    <AssemblyVersion>1.0.0.0</AssemblyVersion>
+    <FileVersion>1.0.0.0</FileVersion>
+    <Version>1.0.0</Version>
+    <Company>Bloody</Company>
+    <Product>BloodysManager</Product>
+    <Authors>bloody2927</Authors>
   </PropertyGroup>
   <ItemGroup>
     <None Include="appsettings.json" CopyToOutputDirectory="Always" />
