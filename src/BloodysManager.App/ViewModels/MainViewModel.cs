@@ -5,7 +5,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
-using System.Windows.Forms;
+using WinForms = System.Windows.Forms;
 using System.Windows.Input;
 using BloodysManager.App.Services;
 
@@ -114,7 +114,7 @@ public sealed class MainViewModel : ViewModelBase
     {
         var line = $"[{DateTime.Now:HH:mm:ss}] {prefix} {message}\n";
         void Apply() => Log += line;
-        var dispatcher = Application.Current?.Dispatcher;
+        var dispatcher = System.Windows.Application.Current?.Dispatcher;
         if (dispatcher == null || dispatcher.CheckAccess())
             Apply();
         else
@@ -186,8 +186,8 @@ public sealed class MainViewModel : ViewModelBase
 
     void BrowseAssign(Action<string> setter, string desc)
     {
-        using var dlg = new FolderBrowserDialog { Description = desc, ShowNewFolderButton = true };
-        if (dlg.ShowDialog() == DialogResult.OK && !string.IsNullOrWhiteSpace(dlg.SelectedPath))
+        using var dlg = new WinForms.FolderBrowserDialog { Description = desc, ShowNewFolderButton = true };
+        if (dlg.ShowDialog() == WinForms.DialogResult.OK && !string.IsNullOrWhiteSpace(dlg.SelectedPath))
         {
             setter(dlg.SelectedPath);
             RefreshPathStates();
@@ -205,7 +205,7 @@ public sealed class MainViewModel : ViewModelBase
 
     void SetWorldRunning(bool value)
     {
-        var dispatcher = Application.Current?.Dispatcher;
+        var dispatcher = System.Windows.Application.Current?.Dispatcher;
         if (dispatcher == null || dispatcher.CheckAccess())
             IsWorldRunning = value;
         else
@@ -214,14 +214,14 @@ public sealed class MainViewModel : ViewModelBase
 
     void SetAuthRunning(bool value)
     {
-        var dispatcher = Application.Current?.Dispatcher;
+        var dispatcher = System.Windows.Application.Current?.Dispatcher;
         if (dispatcher == null || dispatcher.CheckAccess())
             IsAuthRunning = value;
         else
             dispatcher.Invoke(() => IsAuthRunning = value);
     }
 
-    public ICommand CmdExit => new Relay(_ => Application.Current?.Shutdown());
+    public ICommand CmdExit => new Relay(_ => System.Windows.Application.Current?.Shutdown());
 
     public ICommand CmdSetPathLive => new Relay(_ =>
     {
