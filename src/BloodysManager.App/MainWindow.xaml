@@ -2,7 +2,7 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:conv="clr-namespace:BloodysManager.App.Views.Converters"
-        Title="{Binding AppTitle}"
+        Title="Bloody's Manager"
         MinWidth="960"
         MinHeight="640"
         WindowStartupLocation="CenterScreen">
@@ -12,10 +12,10 @@
 
     <DockPanel LastChildFill="True">
         <Menu DockPanel.Dock="Top">
-            <MenuItem Header="Datei">
-                <MenuItem Header="{Binding BtnCreateStruct}" Command="{Binding CmdCreateFolders}" />
+            <MenuItem Header="File">
+                <MenuItem Header="Save Repository URL" Command="{Binding CmdSaveRepoUrl}" />
                 <Separator />
-                <MenuItem Header="{Binding BtnExit}" Command="{Binding CmdExit}" />
+                <MenuItem Header="Exit" Command="{Binding CmdExit}" />
             </MenuItem>
             <MenuItem Header="Settings" Command="{Binding CmdOpenSettings}" />
             <MenuItem Header="Credits" Command="{Binding CmdOpenCredits}" />
@@ -28,116 +28,150 @@
                            FontWeight="Bold"
                            HorizontalAlignment="Center" />
 
-                <Button Content="{Binding BtnCreateStruct}"
-                        Command="{Binding CmdCreateFolders}"
-                        Style="{StaticResource SecondaryButtonStyle}"
-                        HorizontalAlignment="Center" />
+                <Border Style="{StaticResource CardBorderStyle}">
+                    <StackPanel>
+                        <TextBlock Text="Repository" Style="{StaticResource SectionHeaderTextStyle}" />
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBox Width="420"
+                                     Style="{StaticResource PathTextBoxStyle}"
+                                     Text="{Binding RepoUrl, UpdateSourceTrigger=PropertyChanged}" />
+                            <Button Content="Save"
+                                    Style="{StaticResource SecondaryButtonStyle}"
+                                    Command="{Binding CmdSaveRepoUrl}"
+                                    Margin="8,0,0,0" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
 
                 <Border Style="{StaticResource CardBorderStyle}">
                     <StackPanel>
-                        <TextBlock Text="Pfad Übersicht" Style="{StaticResource SectionHeaderTextStyle}" />
-
-                        <Grid Margin="0,4,0,0">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="*" />
-                            </Grid.ColumnDefinitions>
-                            <Ellipse Style="{StaticResource StatusDotStyle}"
-                                     Fill="{Binding ExistsDownload, Converter={StaticResource BoolToBrush}}" />
-                            <TextBlock Grid.Column="1" Text="Download" VerticalAlignment="Center" Margin="0,0,8,0" />
-                            <TextBox Grid.Column="2"
-                                     Style="{StaticResource PathTextBoxStyle}"
-                                     Text="{Binding PathDownload, UpdateSourceTrigger=PropertyChanged}" />
-                        </Grid>
+                        <DockPanel>
+                            <TextBlock Text="Servers"
+                                       Style="{StaticResource SectionHeaderTextStyle}"
+                                       DockPanel.Dock="Left" />
+                            <StackPanel Orientation="Horizontal" DockPanel.Dock="Right">
+                                <Button Content="New" Style="{StaticResource SecondaryButtonStyle}" Command="{Binding CmdAddProfile}" />
+                                <Button Content="Create Structure" Style="{StaticResource SecondaryButtonStyle}" Command="{Binding CmdCreateFolders}" Margin="8,0,0,0" />
+                            </StackPanel>
+                        </DockPanel>
 
                         <Grid Margin="0,8,0,0">
                             <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="220" />
+                                <ColumnDefinition Width="16" />
                                 <ColumnDefinition Width="*" />
                             </Grid.ColumnDefinitions>
-                            <Ellipse Style="{StaticResource StatusDotStyle}"
-                                     Fill="{Binding ExistsLive, Converter={StaticResource BoolToBrush}}" />
-                            <TextBlock Grid.Column="1" Text="Live" VerticalAlignment="Center" Margin="0,0,8,0" />
-                            <TextBox Grid.Column="2"
-                                     Style="{StaticResource PathTextBoxStyle}"
-                                     Text="{Binding PathLive, UpdateSourceTrigger=PropertyChanged}" />
-                        </Grid>
 
-                        <Grid Margin="0,8,0,0">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="*" />
-                            </Grid.ColumnDefinitions>
-                            <Ellipse Style="{StaticResource StatusDotStyle}"
-                                     Fill="{Binding ExistsCopy, Converter={StaticResource BoolToBrush}}" />
-                            <TextBlock Grid.Column="1" Text="Copy" VerticalAlignment="Center" Margin="0,0,8,0" />
-                            <TextBox Grid.Column="2"
-                                     Style="{StaticResource PathTextBoxStyle}"
-                                     Text="{Binding PathCopy, UpdateSourceTrigger=PropertyChanged}" />
-                        </Grid>
+                            <ListBox ItemsSource="{Binding Profiles}"
+                                     SelectedItem="{Binding SelectedProfile}"
+                                     BorderThickness="0"
+                                     MinHeight="160">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <DockPanel>
+                                            <Button Content="×"
+                                                    Width="24"
+                                                    Height="24"
+                                                    Margin="0,0,6,0"
+                                                    Command="{Binding DataContext.CmdRemoveProfile, RelativeSource={RelativeSource AncestorType=ListBox}}"
+                                                    CommandParameter="{Binding}"
+                                                    Style="{StaticResource SecondaryButtonStyle}" />
+                                            <TextBlock Text="{Binding Name}" VerticalAlignment="Center" />
+                                        </DockPanel>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
 
-                        <Grid Margin="0,8,0,0">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="*" />
-                            </Grid.ColumnDefinitions>
-                            <Ellipse Style="{StaticResource StatusDotStyle}"
-                                     Fill="{Binding ExistsBackup, Converter={StaticResource BoolToBrush}}" />
-                            <TextBlock Grid.Column="1" Text="Backup" VerticalAlignment="Center" Margin="0,0,8,0" />
-                            <TextBox Grid.Column="2"
-                                     Style="{StaticResource PathTextBoxStyle}"
-                                     Text="{Binding PathBackup, UpdateSourceTrigger=PropertyChanged}" />
-                        </Grid>
+                            <Border Grid.Column="2" BorderBrush="#FFE0E0E0" BorderThickness="1" CornerRadius="8" Padding="12" Background="White">
+                                <StackPanel>
+                                    <TextBlock Text="{Binding SelectedProfile.Name, FallbackValue=No server selected}" FontWeight="SemiBold" FontSize="16" Margin="0,0,0,8" />
 
-                        <Grid Margin="0,8,0,0">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="*" />
-                            </Grid.ColumnDefinitions>
-                            <Ellipse Style="{StaticResource StatusDotStyle}"
-                                     Fill="{Binding ExistsBackupUpdate, Converter={StaticResource BoolToBrush}}" />
-                            <TextBlock Grid.Column="1" Text="Backup Zip" VerticalAlignment="Center" Margin="0,0,8,0" />
-                            <TextBox Grid.Column="2"
-                                     Style="{StaticResource PathTextBoxStyle}"
-                                     Text="{Binding PathBackupUpdate, UpdateSourceTrigger=PropertyChanged}" />
+                                    <Grid Margin="0,4,0,0">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <Ellipse Grid.Column="0" Style="{StaticResource StatusDotStyle}" Fill="{Binding ExistsLive, Converter={StaticResource BoolToBrush}}" />
+                                        <TextBlock Grid.Column="1" Text="Live" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                        <TextBox Grid.Column="2" Style="{StaticResource PathTextBoxStyle}" Text="{Binding SelectedProfile.PathLive, UpdateSourceTrigger=PropertyChanged}" />
+                                        <Button Grid.Column="3" Content="..." Width="32" Command="{Binding CmdSetPathLive}" />
+                                    </Grid>
+
+                                    <Grid Margin="0,8,0,0">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <Ellipse Grid.Column="0" Style="{StaticResource StatusDotStyle}" Fill="{Binding ExistsCopy, Converter={StaticResource BoolToBrush}}" />
+                                        <TextBlock Grid.Column="1" Text="Copy" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                        <TextBox Grid.Column="2" Style="{StaticResource PathTextBoxStyle}" Text="{Binding SelectedProfile.PathCopy, UpdateSourceTrigger=PropertyChanged}" />
+                                        <Button Grid.Column="3" Content="..." Width="32" Command="{Binding CmdSetPathCopy}" />
+                                    </Grid>
+
+                                    <Grid Margin="0,8,0,0">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <Ellipse Grid.Column="0" Style="{StaticResource StatusDotStyle}" Fill="{Binding ExistsBackup, Converter={StaticResource BoolToBrush}}" />
+                                        <TextBlock Grid.Column="1" Text="Backup" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                        <TextBox Grid.Column="2" Style="{StaticResource PathTextBoxStyle}" Text="{Binding SelectedProfile.PathBackup, UpdateSourceTrigger=PropertyChanged}" />
+                                        <Button Grid.Column="3" Content="..." Width="32" Command="{Binding CmdSetPathBackup}" />
+                                    </Grid>
+
+                                    <Grid Margin="0,8,0,0">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <Ellipse Grid.Column="0" Style="{StaticResource StatusDotStyle}" Fill="{Binding ExistsBackupZip, Converter={StaticResource BoolToBrush}}" />
+                                        <TextBlock Grid.Column="1" Text="Backup Zip" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                        <TextBox Grid.Column="2" Style="{StaticResource PathTextBoxStyle}" Text="{Binding SelectedProfile.PathBackupZip, UpdateSourceTrigger=PropertyChanged}" />
+                                        <Button Grid.Column="3" Content="..." Width="32" Command="{Binding CmdSetPathBackupZip}" />
+                                    </Grid>
+                                </StackPanel>
+                            </Border>
                         </Grid>
                     </StackPanel>
                 </Border>
 
                 <UniformGrid Columns="4" Margin="0,8,0,0">
-                    <Button Content="{Binding BtnClean}"
+                    <Button Content="Download"
                             Style="{StaticResource RoundedActionButtonStyle}"
                             Background="{StaticResource AccentOrange}"
                             Command="{Binding CmdCleanDownload}" />
-                    <Button Content="{Binding BtnUpdate}"
+                    <Button Content="Update"
                             Style="{StaticResource RoundedActionButtonStyle}"
                             Background="{StaticResource AccentOrange}"
                             Command="{Binding CmdUpdate}" />
-                    <Button Content="{Binding BtnCopy}"
+                    <Button Content="Live → Copy"
                             Style="{StaticResource RoundedActionButtonStyle}"
                             Background="{StaticResource AccentGreen}"
                             Command="{Binding CmdCopy}" />
-                    <Button Content="{Binding BtnDeleteLive}"
+                    <Button Content="Delete Live"
                             Style="{StaticResource RoundedActionButtonStyle}"
                             Background="{StaticResource AccentRed}"
                             Command="{Binding CmdDeleteLive}" />
                 </UniformGrid>
 
                 <UniformGrid Columns="3" Margin="0,8,0,0">
-                    <Button Content="{Binding BtnDeleteCopy}"
+                    <Button Content="Delete Copy"
                             Style="{StaticResource RoundedActionButtonStyle}"
                             Background="{StaticResource AccentRed}"
                             Command="{Binding CmdDeleteCopy}" />
-                    <Button Content="{Binding BtnRotate}"
+                    <Button Content="Rotate Backup"
                             Style="{StaticResource RoundedActionButtonStyle}"
                             Background="{StaticResource AccentGold}"
                             Command="{Binding CmdRotate}" />
-                    <Button Content="{Binding BtnExit}"
+                    <Button Content="Exit"
                             Style="{StaticResource RoundedActionButtonStyle}"
                             Background="{StaticResource AccentGold}"
                             Command="{Binding CmdExit}" />

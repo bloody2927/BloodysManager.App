@@ -27,23 +27,34 @@ public sealed class BackupService
         return fromPath ?? common.FirstOrDefault(File.Exists);
     }
 
-    public async Task<string> RotateAsync(ShellService shell, CopyService copy, CancellationToken ct)
+    public Task<string> RotateAsync(ShellService shell, CopyService copy, CancellationToken ct)
+        => RotateAsync(shell, copy, _cfg.CopyPath, _cfg.BackupRoot, _cfg.BackupZip, ct);
+
+    public async Task<string> RotateAsync(
+        ShellService shell,
+        CopyService copy,
+        string? copyPathOverride,
+        string? backupRootOverride,
+        string? backupZipOverride,
+        CancellationToken ct)
     {
-        var copyPath = _cfg.CopyPath;
-        var backupRoot = _cfg.BackupRoot;
-        if (string.IsNullOrWhiteSpace(copyPath) || string.IsNullOrWhiteSpace(backupRoot))
+        var copyPath = copyPathOverride ?? _cfg.CopyPath;
+        var backupRoot = backupRootOverride ?? _cfg.BackupRoot;
+        var archiveRoot = backupZipOverride ?? backupRoot;
+
+        if (string.IsNullOrWhiteSpace(copyPath) || string.IsNullOrWhiteSpace(archiveRoot))
             throw new InvalidOperationException("Paths not configured.");
 
         if (!Directory.Exists(copyPath))
-            await copy.MirrorLiveToCopyAsync(ct);
+            await copy.MirrorLiveToCopyAsync(ct, _cfg.LivePath, copyPath);
 
         var tag = DateTime.Now.ToString("dd_MM_yy");
-        string Base(string? suffix = null) => Path.Combine(backupRoot, suffix is null ? $"Backup_{tag}" : $"Backup_{tag}_{suffix}");
+        string Base(string? suffix = null) => Path.Combine(archiveRoot, suffix is null ? $"Backup_{tag}" : $"Backup_{tag}_{suffix}");
         string baseName = Base(); int i = 0;
         while (File.Exists(baseName + ".7z") || File.Exists(baseName + ".rar") || File.Exists(baseName + ".zip"))
             baseName = Base((++i).ToString());
 
-        Directory.CreateDirectory(backupRoot);
+        Directory.CreateDirectory(archiveRoot);
 
         string? seven = FindExe("7z.exe");
         string? rar   = FindExe("rar.exe");
@@ -54,7 +65,7 @@ public sealed class BackupService
                 var dst = baseName + ".7z";
                 var (c, _, e) = await shell.RunAsync(seven, $"a -t7z -mx=7 -mmt=on \"{dst}\" \"{copyPath}\\*\"", null, ct);
                 if (c != 0) throw new Exception($"7z failed: {e}");
-                await copy.MirrorLiveToCopyAsync(ct);
+                await copy.MirrorLiveToCopyAsync(ct, _cfg.LivePath, copyPath);
                 return dst;
             }
             if (fmt == "rar" && rar is not null)
@@ -62,14 +73,14 @@ public sealed class BackupService
                 var dst = baseName + ".rar";
                 var (c, _, e) = await shell.RunAsync(rar, $"a -ep1 -m5 -r \"{dst}\" \"{copyPath}\\*\"", null, ct);
                 if (c != 0) throw new Exception($"rar failed: {e}");
-                await copy.MirrorLiveToCopyAsync(ct);
+                await copy.MirrorLiveToCopyAsync(ct, _cfg.LivePath, copyPath);
                 return dst;
             }
             if (fmt == "zip")
             {
                 var dst = baseName + ".zip";
                 ZipFile.CreateFromDirectory(copyPath, dst, CompressionLevel.Optimal, includeBaseDirectory: false);
-                await copy.MirrorLiveToCopyAsync(ct);
+                await copy.MirrorLiveToCopyAsync(ct, _cfg.LivePath, copyPath);
                 return dst;
             }
         }

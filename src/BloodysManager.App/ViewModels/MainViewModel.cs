@@ -1,24 +1,29 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.ComponentModel;
-using System.Runtime.CompilerServices;
-using System.Windows.Input;
-using System.Windows.Forms;
-using BloodysManager.App.Services;
 using System.IO;
+using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Windows.Forms;
+using System.Windows.Input;
+using BloodysManager.App.Models;
+using BloodysManager.App.Services;
 
 namespace BloodysManager.App.ViewModels;
 
 public sealed class MainViewModel : INotifyPropertyChanged
 {
     public event PropertyChangedEventHandler? PropertyChanged;
-    void Set<T>(ref T field, T value, [CallerMemberName] string? n = null)
+
+    bool Set<T>(ref T field, T value, [CallerMemberName] string? n = null)
     {
-        if (EqualityComparer<T>.Default.Equals(field, value)) return;
+        if (EqualityComparer<T>.Default.Equals(field, value)) return false;
         field = value;
         PropertyChanged?.Invoke(this, new(n));
+        return true;
     }
 
     readonly Config _cfg;
@@ -29,6 +34,87 @@ public sealed class MainViewModel : INotifyPropertyChanged
 
     public Localizer L { get; }
 
+    readonly ObservableCollection<ServerProfile> _profiles = new();
+    public ObservableCollection<ServerProfile> Profiles => _profiles;
+
+    ServerProfile? _selectedProfile;
+    public ServerProfile? SelectedProfile
+    {
+        get => _selectedProfile;
+        set
+        {
+            if (Set(ref _selectedProfile, value) && value is not null)
+            {
+                SyncConfigFromProfile(value);
+                RefreshPathStates();
+            }
+            else if (value is null)
+            {
+                RefreshPathStates();
+            }
+        }
+    }
+
+    void OnProfilePropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (sender is ServerProfile profile && profile == SelectedProfile)
+        {
+            SyncConfigFromProfile(profile);
+            RefreshPathStates();
+        }
+    }
+
+    string _repoUrl;
+    public string RepoUrl
+    {
+        get => _repoUrl;
+        set
+        {
+            if (Set(ref _repoUrl, value))
+            {
+                _cfg.RepositoryUrl = value;
+            }
+        }
+    }
+
+    string _log = string.Empty;
+    public string Log
+    {
+        get => _log;
+        set => Set(ref _log, value);
+    }
+
+    bool _busy;
+    public bool IsBusy
+    {
+        get => _busy;
+        set => Set(ref _busy, value);
+    }
+
+    bool _existsLive, _existsCopy, _existsBackup, _existsBackupZip;
+    public bool ExistsLive
+    {
+        get => _existsLive;
+        private set => Set(ref _existsLive, value);
+    }
+    public bool ExistsCopy
+    {
+        get => _existsCopy;
+        private set => Set(ref _existsCopy, value);
+    }
+    public bool ExistsBackup
+    {
+        get => _existsBackup;
+        private set => Set(ref _existsBackup, value);
+    }
+    public bool ExistsBackupZip
+    {
+        get => _existsBackupZip;
+        private set => Set(ref _existsBackupZip, value);
+    }
+
+    public string AppTitle => "Bloody's Manager";
+
     public MainViewModel(Config cfg)
     {
         _cfg = cfg;
@@ -37,145 +123,194 @@ public sealed class MainViewModel : INotifyPropertyChanged
         _copy = new(_shell, _cfg);
         _backup = new(_cfg);
 
-        PathDownload = _cfg.LivePath;
-        PathLive     = _cfg.LivePath;
-        PathCopy     = _cfg.CopyPath;
-        PathBackup   = _cfg.BackupRoot;
-        PathBackupUpdate = _cfg.BackupRoot;
+        _repoUrl = _cfg.RepositoryUrl;
 
-        RefreshPathStates();
-    }
-
-    public string AppTitle        => "Bloody's Manager";
-    public string BtnCreateStruct => "Ordner-Struktur erstellen";
-    public string BtnClean        => "1) Download/Update";
-    public string BtnUpdate       => "1) Update";
-    public string BtnCopy         => "2) Live → Copy";
-    public string BtnDeleteLive   => "3) Delete Live";
-    public string BtnDeleteCopy   => "3.1) Delete Copy";
-    public string BtnCurrent      => "5) Rotate → Backup";
-    public string BtnRotate       => "5) Rotate → Backup";
-    public string BtnExit         => "9) Exit";
-
-    void RaiseTextChanges()
-    {
-        foreach (var name in new[]{
-            nameof(AppTitle), nameof(BtnCreateStruct), nameof(BtnClean), nameof(BtnUpdate),
-            nameof(BtnCopy), nameof(BtnDeleteLive), nameof(BtnDeleteCopy),
-            nameof(BtnCurrent), nameof(BtnRotate), nameof(BtnExit)
-        }) PropertyChanged?.Invoke(this, new(name));
-    }
-
-    public ICommand CmdCreateFolders => new Relay(async _ =>
-    {
-        using var dlg = new FolderBrowserDialog { Description = "Root-Ordner wählen für Live/Copy/Backup", ShowNewFolderButton = true };
-        if (dlg.ShowDialog() == DialogResult.OK && !string.IsNullOrWhiteSpace(dlg.SelectedPath))
+        var initialProfile = new ServerProfile
         {
-            await _copy.CreateBaseFoldersAsync(dlg.SelectedPath);
-            PathLive   = _cfg.LivePath;
-            PathCopy   = _cfg.CopyPath;
-            PathBackup = _cfg.BackupRoot;
-            PathDownload = _cfg.LivePath;
-            _cfg.Save(AppContext.BaseDirectory);
-            RefreshPathStates();
-            Ok($"Ordner angelegt: {dlg.SelectedPath}");
-        }
-    });
-
-    string _pathDownload="", _pathLive="", _pathCopy="", _pathBackup="", _pathBackupUpdate="";
-    public string PathDownload
-    {
-        get=>_pathDownload;
-        set
-        {
-            Set(ref _pathDownload, value);
-            OnPathsChanged();
-        }
-    }
-    public string PathLive
-    {
-        get=>_pathLive;
-        set
-        {
-            Set(ref _pathLive, value);
-            _cfg.LivePath = value;
-            OnPathsChanged();
-        }
-    }
-    public string PathCopy
-    {
-        get=>_pathCopy;
-        set
-        {
-            Set(ref _pathCopy, value);
-            _cfg.CopyPath = value;
-            OnPathsChanged();
-        }
-    }
-    public string PathBackup
-    {
-        get=>_pathBackup;
-        set
-        {
-            Set(ref _pathBackup, value);
-            _cfg.BackupRoot = value;
-            OnPathsChanged();
-        }
-    }
-    public string PathBackupUpdate
-    {
-        get=>_pathBackupUpdate;
-        set
-        {
-            Set(ref _pathBackupUpdate, value);
-            OnPathsChanged();
-        }
+            Name = "Server 1",
+            PathLive = _cfg.LivePath,
+            PathCopy = _cfg.CopyPath,
+            PathBackup = _cfg.BackupRoot,
+            PathBackupZip = string.IsNullOrWhiteSpace(_cfg.BackupZip)
+                ? Path.Combine(Path.GetDirectoryName(_cfg.BackupRoot) ?? _cfg.BackupRoot, "BackupZip")
+                : _cfg.BackupZip,
+        };
+        AttachProfile(initialProfile);
+        _profiles.Add(initialProfile);
+        SelectedProfile = initialProfile;
     }
 
-    bool _existsDownload, _existsLive, _existsCopy, _existsBackup, _existsBackupUpdate;
-    public bool ExistsDownload { get=>_existsDownload; set=>Set(ref _existsDownload, value); }
-    public bool ExistsLive     { get=>_existsLive;     set=>Set(ref _existsLive, value); }
-    public bool ExistsCopy     { get=>_existsCopy;     set=>Set(ref _existsCopy, value); }
-    public bool ExistsBackup   { get=>_existsBackup;   set=>Set(ref _existsBackup, value); }
-    public bool ExistsBackupUpdate { get=>_existsBackupUpdate; set=>Set(ref _existsBackupUpdate, value); }
+    void AttachProfile(ServerProfile profile)
+    {
+        profile.PropertyChanged += OnProfilePropertyChanged;
+    }
 
-    void OnPathsChanged()=>RefreshPathStates();
+    void DetachProfile(ServerProfile profile)
+    {
+        profile.PropertyChanged -= OnProfilePropertyChanged;
+    }
+
+    void SyncConfigFromProfile(ServerProfile profile)
+    {
+        _cfg.LivePath = profile.PathLive;
+        _cfg.CopyPath = profile.PathCopy;
+        _cfg.BackupRoot = profile.PathBackup;
+        _cfg.BackupZip = profile.PathBackupZip;
+    }
+
     void RefreshPathStates()
     {
-        ExistsDownload     = Directory.Exists(PathDownload);
-        ExistsLive         = Directory.Exists(PathLive);
-        ExistsCopy         = Directory.Exists(PathCopy);
-        ExistsBackup       = Directory.Exists(PathBackup);
-        ExistsBackupUpdate = Directory.Exists(PathBackupUpdate);
+        var p = SelectedProfile;
+        if (p is null)
+        {
+            ExistsLive = ExistsCopy = ExistsBackup = ExistsBackupZip = false;
+            return;
+        }
+
+        ExistsLive = Directory.Exists(p.PathLive);
+        ExistsCopy = Directory.Exists(p.PathCopy);
+        ExistsBackup = Directory.Exists(p.PathBackup);
+        ExistsBackupZip = Directory.Exists(p.PathBackupZip);
     }
 
-    string _log=""; public string Log { get=>_log; set=>Set(ref _log, value); }
-    bool _busy; public bool IsBusy { get=>_busy; set=>Set(ref _busy, value); }
-
-    void Ok(string s)=>Log += $"[{DateTime.Now:HH:mm:ss}] ✓ {s}\n";
-    void Err(string s)=>Log+= $"[{DateTime.Now:HH:mm:ss}] ✗ {s}\n";
+    void Ok(string s) => Log += $"[{DateTime.Now:HH:mm:ss}] ✓ {s}\n";
+    void Err(string s) => Log += $"[{DateTime.Now:HH:mm:ss}] ✗ {s}\n";
 
     async Task Guard(Func<CancellationToken, Task> op)
     {
-        try { IsBusy = true; await op(CancellationToken.None); }
-        catch (Exception ex) { Err(ex.Message); }
-        finally { IsBusy = false; }
+        try
+        {
+            IsBusy = true;
+            await op(CancellationToken.None);
+        }
+        catch (Exception ex)
+        {
+            Err(ex.Message);
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    ServerProfile RequireProfile()
+    {
+        return SelectedProfile ?? throw new InvalidOperationException("No server profile selected.");
+    }
+
+    void BrowseAssign(ServerProfile profile, Action<string> setter, string title)
+    {
+        using var dlg = new FolderBrowserDialog
+        {
+            Description = title,
+            ShowNewFolderButton = true
+        };
+        if (dlg.ShowDialog() == DialogResult.OK && !string.IsNullOrWhiteSpace(dlg.SelectedPath))
+        {
+            setter(dlg.SelectedPath);
+            SyncConfigFromProfile(profile);
+            _cfg.Save(AppContext.BaseDirectory);
+            RefreshPathStates();
+            Ok($"Updated path for {profile.Name}.");
+        }
     }
 
     public ICommand CmdExit => new Relay(_ => System.Windows.Application.Current.Shutdown());
 
     public ICommand CmdOpenSettings => new Relay(_ =>
         System.Windows.MessageBox.Show("Settings placeholder – edit appsettings.json.", "Settings"));
+
     public ICommand CmdOpenCredits => new Relay(_ =>
         System.Windows.MessageBox.Show("Bloody's Manager – MIT License © 2025", "Credits"));
+
+    public ICommand CmdSaveRepoUrl => new Relay(_ =>
+    {
+        _cfg.Save(AppContext.BaseDirectory);
+        Ok("Repository URL saved.");
+    });
+
+    public ICommand CmdAddProfile => new Relay(_ =>
+    {
+        var idx = _profiles.Count + 1;
+        var profile = new ServerProfile
+        {
+            Name = $"Server {idx}",
+            PathLive = Path.Combine(@"B:\\Server", $"Live_{idx}", "azerothcore-wotlk"),
+            PathCopy = Path.Combine(@"B:\\Server", $"Live_Copy_{idx}", "azerothcore-wotlk-copy"),
+            PathBackup = Path.Combine(@"B:\\Server", $"Backup_{idx}"),
+            PathBackupZip = Path.Combine(@"B:\\Server", $"BackupZip_{idx}"),
+        };
+        AttachProfile(profile);
+        _profiles.Add(profile);
+        SelectedProfile = profile;
+        Ok($"Added profile {profile.Name}.");
+    });
+
+    public ICommand CmdRemoveProfile => new Relay(obj =>
+    {
+        if (obj is not ServerProfile profile) return;
+        if (!_profiles.Contains(profile)) return;
+
+        DetachProfile(profile);
+        _profiles.Remove(profile);
+        if (SelectedProfile == profile)
+            SelectedProfile = _profiles.FirstOrDefault();
+
+        RefreshPathStates();
+        Ok($"Removed profile {profile.Name}.");
+    });
+
+    public ICommand CmdSetPathLive => new Relay(_ =>
+    {
+        var profile = RequireProfile();
+        BrowseAssign(profile, v => profile.PathLive = v, "Select Live folder");
+    });
+
+    public ICommand CmdSetPathCopy => new Relay(_ =>
+    {
+        var profile = RequireProfile();
+        BrowseAssign(profile, v => profile.PathCopy = v, "Select Copy folder");
+    });
+
+    public ICommand CmdSetPathBackup => new Relay(_ =>
+    {
+        var profile = RequireProfile();
+        BrowseAssign(profile, v => profile.PathBackup = v, "Select Backup folder");
+    });
+
+    public ICommand CmdSetPathBackupZip => new Relay(_ =>
+    {
+        var profile = RequireProfile();
+        BrowseAssign(profile, v => profile.PathBackupZip = v, "Select Backup Zip folder");
+    });
+
+    public ICommand CmdCreateFolders => new Relay(async _ =>
+    {
+        var profile = RequireProfile();
+        using var dlg = new FolderBrowserDialog
+        {
+            Description = "Choose base folder for server structure",
+            ShowNewFolderButton = true
+        };
+        if (dlg.ShowDialog() != DialogResult.OK || string.IsNullOrWhiteSpace(dlg.SelectedPath))
+            return;
+
+        await _copy.CreateBaseFoldersAsync(dlg.SelectedPath, profile);
+        SyncConfigFromProfile(profile);
+        _cfg.Save(AppContext.BaseDirectory);
+        RefreshPathStates();
+        Ok($"Folders created for {profile.Name}.");
+    });
 
     public ICommand CmdCleanDownload => new Relay(async _ =>
     {
         await Guard(async ct =>
         {
-            var commit = await _git.CleanCloneAsync(ct);
+            var profile = RequireProfile();
+            SyncConfigFromProfile(profile);
+            var commit = await _git.CleanCloneAsync(ct, profile.PathLive, RepoUrl);
             RefreshPathStates();
-            Ok($"Download/Update OK (commit {commit})");
+            Ok($"Download OK ({profile.Name}: {commit})");
         });
     });
 
@@ -183,42 +318,61 @@ public sealed class MainViewModel : INotifyPropertyChanged
     {
         await Guard(async ct =>
         {
-            var commit = await _git.UpdateAsync(ct);
-            Ok($"Update OK (commit {commit})");
+            var profile = RequireProfile();
+            SyncConfigFromProfile(profile);
+            var commit = await _git.UpdateAsync(ct, profile.PathLive, RepoUrl);
+            RefreshPathStates();
+            Ok($"Update OK ({profile.Name}: {commit})");
         });
     });
 
     public ICommand CmdCopy => new Relay(async _ =>
     {
-        await Guard(async ct => { await _copy.MirrorLiveToCopyAsync(ct); RefreshPathStates(); Ok("Copy OK"); });
+        await Guard(async ct =>
+        {
+            var profile = RequireProfile();
+            await _copy.MirrorLiveToCopyAsync(ct, profile.PathLive, profile.PathCopy);
+            RefreshPathStates();
+            Ok($"Copy OK for {profile.Name}");
+        });
     });
 
-    public ICommand CmdDeleteLive => new Relay(_ =>
+    public ICommand CmdDeleteLive => new Relay(async _ =>
     {
-        if (System.Windows.MessageBox.Show("Delete Live?", "Confirm",
-            System.Windows.MessageBoxButton.YesNo)==System.Windows.MessageBoxResult.Yes)
-        { _copy.DeleteLiveAsync().Wait(); RefreshPathStates(); Ok("Deleted Live"); }
+        var profile = RequireProfile();
+        if (System.Windows.MessageBox.Show($"Delete Live for {profile.Name}?", "Confirm",
+                System.Windows.MessageBoxButton.YesNo) != System.Windows.MessageBoxResult.Yes)
+            return;
+
+        await _copy.DeleteLiveAsync(profile.PathLive);
+        RefreshPathStates();
+        Ok($"Deleted Live for {profile.Name}");
     });
 
-    public ICommand CmdDeleteCopy => new Relay(_ =>
+    public ICommand CmdDeleteCopy => new Relay(async _ =>
     {
-        if (System.Windows.MessageBox.Show("Delete Copy?", "Confirm",
-            System.Windows.MessageBoxButton.YesNo)==System.Windows.MessageBoxResult.Yes)
-        { _copy.DeleteCopyAsync().Wait(); RefreshPathStates(); Ok("Deleted Copy"); }
+        var profile = RequireProfile();
+        if (System.Windows.MessageBox.Show($"Delete Copy for {profile.Name}?", "Confirm",
+                System.Windows.MessageBoxButton.YesNo) != System.Windows.MessageBoxResult.Yes)
+            return;
+
+        await _copy.DeleteCopyAsync(profile.PathCopy);
+        RefreshPathStates();
+        Ok($"Deleted Copy for {profile.Name}");
     });
 
     public ICommand CmdRotate => new Relay(async _ =>
     {
         await Guard(async ct =>
         {
-            var dst = await _backup.RotateAsync(_shell, _copy, ct);
+            var profile = RequireProfile();
+            SyncConfigFromProfile(profile);
+            var dst = await _backup.RotateAsync(_shell, _copy,
+                profile.PathCopy, profile.PathBackup, profile.PathBackupZip, ct);
             RefreshPathStates();
             Ok($"Backup OK → {dst}");
         });
     });
-
-    // === Vorbereitung für mehrere Server (TODO in Folgeschritt) ===
-    // public ObservableCollection<ServerProfileVM> Profiles { get; } = new();
 }
 
 public sealed class Relay : ICommand
