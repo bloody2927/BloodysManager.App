@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
 
@@ -6,57 +5,31 @@ namespace BloodysManager.App.Services;
 
 public sealed class Config
 {
-    public string RepoUrl { get; init; } = "";
-    public string Branch  { get; init; } = "master";
-    public int    Threads { get; init; } = 8;
+    public string RepositoryUrl { get; set; } =
+        "https://github.com/azerothcore/azerothcore-wotlk.git";
 
-    public string BaseRoot { get; set; } = @"D:\Server";
-    public string[] PreferredArchiveOrder { get; init; } = new[] { "7z", "rar", "zip" };
+    public string LivePath { get; set; } =
+        @"B:\\Server\\Live\\azerothcore-wotlk";
 
-    public string Language { get; set; } = "de";
+    public string CopyPath { get; set; } =
+        @"B:\\Server\\Live_Copy\\azerothcore-wotlk-copy";
 
-    public string LiveRoot   => Path.Combine(BaseRoot, "Live");
-    public string LivePath   => Path.Combine(LiveRoot, "azerothcore-wotlk");
-    public string CopyRoot   => Path.Combine(BaseRoot, "Live_Copy");
-    public string CopyPath   => Path.Combine(CopyRoot, "azerothcore-wotlk-copy");
-    public string BackupRoot => Path.Combine(BaseRoot, "Backup");
+    public string BackupRoot { get; set; } =
+        @"B:\\Server\\Backup";
 
-    public List<ServerProfileConfig> Profiles { get; init; } = new();
+    static string CfgFile(string baseDir) => Path.Combine(baseDir, "appsettings.json");
 
-    public IReadOnlyList<ServerProfileConfig> ResolveProfiles()
+    public static Config Load(string baseDir)
     {
-        if (Profiles is { Count: > 0 })
-        {
-            foreach (var profile in Profiles)
-            {
-                if (string.IsNullOrWhiteSpace(profile.Name))
-                    profile.Name = "Profile";
-                if (string.IsNullOrWhiteSpace(profile.LivePath))
-                    profile.LivePath = LivePath;
-                if (string.IsNullOrWhiteSpace(profile.CopyPath))
-                    profile.CopyPath = CopyPath;
-                if (string.IsNullOrWhiteSpace(profile.BackupRoot))
-                    profile.BackupRoot = BackupRoot;
-                if (string.IsNullOrWhiteSpace(profile.BackupZipRoot) && !string.IsNullOrWhiteSpace(profile.BackupRoot))
-                    profile.BackupZipRoot = Path.Combine(profile.BackupRoot, "Zip");
-            }
-            return Profiles;
-        }
-
-        var fallback = new ServerProfileConfig
-        {
-            Name = "Default",
-            LivePath = LivePath,
-            CopyPath = CopyPath,
-            BackupRoot = BackupRoot,
-            BackupZipRoot = Path.Combine(BackupRoot, "Zip"),
-        };
-        return new[] { fallback };
+        var file = CfgFile(baseDir);
+        if (!File.Exists(file)) return new Config();
+        return JsonSerializer.Deserialize<Config>(File.ReadAllText(file)) ?? new Config();
     }
 
-    public static Config Load(string filePath)
+    public void Save(string baseDir)
     {
-        using var fs = File.OpenRead(filePath);
-        return JsonSerializer.Deserialize<Config>(fs) ?? new Config();
+        var file = CfgFile(baseDir);
+        Directory.CreateDirectory(Path.GetDirectoryName(file)!);
+        File.WriteAllText(file, JsonSerializer.Serialize(this, new JsonSerializerOptions { WriteIndented = true }));
     }
 }

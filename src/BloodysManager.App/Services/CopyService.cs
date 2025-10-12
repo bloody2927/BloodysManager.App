@@ -1,58 +1,106 @@
 using System.IO;
-using BloodysManager.App.ViewModels;
 
 namespace BloodysManager.App.Services;
 
 public sealed class CopyService
 {
-    private readonly ShellService _shell; private readonly Config _cfg;
-    public CopyService(ShellService s, Config c) { _shell = s; _cfg = c; }
+    readonly ShellService _sh;
+    readonly Config _cfg;
 
-    public async Task MirrorLiveToCopyAsync(ServerProfileVM profile, CancellationToken ct)
+    public CopyService(ShellService sh, Config cfg)
+    { _sh = sh; _cfg = cfg; }
+
+    public Task CreateBaseFoldersAsync(string root, CancellationToken ct = default)
     {
-        var livePath = profile.LivePath ?? throw new InvalidOperationException("Live path not configured.");
-        var copyPath = profile.CopyPath ?? throw new InvalidOperationException("Copy path not configured.");
+        // root\Live, root\Live_Copy, root\Backup, root\BackupZip
+        var live     = Path.Combine(root, "Live", "azerothcore-wotlk");
+        var copy     = Path.Combine(root, "Live_Copy", "azerothcore-wotlk-copy");
+        var backup   = Path.Combine(root, "Backup");
+        var backup7z = Path.Combine(root, "BackupZip");
 
-        if (!Directory.Exists(livePath))
-            throw new DirectoryNotFoundException(livePath);
+        Directory.CreateDirectory(live);
+        Directory.CreateDirectory(copy);
+        Directory.CreateDirectory(backup);
+        Directory.CreateDirectory(backup7z);
 
-        var copyRoot = profile.CopyRoot;
-        if (!string.IsNullOrWhiteSpace(copyRoot))
-            Directory.CreateDirectory(copyRoot);
+        // write back to config so the UI uses the chosen root
+        _cfg.LivePath   = live;
+        _cfg.CopyPath   = copy;
+        _cfg.BackupRoot = backup;
 
-        var args = $"/MIR /COPY:DAT /R:1 /W:1 /MT:{_cfg.Threads} /NFL /NDL /NP /XD .git /XF .git \"{livePath}\" \"{copyPath}\"";
-        var (code, _, err) = await _shell.RunAsync("robocopy.exe", args, null, ct);
-        if (code >= 8) throw new Exception($"robocopy failed (code {code}): {err}");
-
-        var commitTxt = Path.Combine(livePath, "commit.txt");
-        if (File.Exists(commitTxt))
-            File.Copy(commitTxt, Path.Combine(copyPath, "commit.txt"), true);
-    }
-
-    public Task DeleteLiveAsync(ServerProfileVM profile)
-    {
-        var liveRoot = profile.LiveRoot;
-        if (!string.IsNullOrWhiteSpace(liveRoot) && Directory.Exists(liveRoot))
-            Directory.Delete(liveRoot, true);
         return Task.CompletedTask;
     }
 
-    public Task DeleteCopyAsync(ServerProfileVM profile)
+    public Task MirrorLiveToCopyAsync(CancellationToken ct = default)
+        => MirrorAsync(_cfg.LivePath, _cfg.CopyPath, ct);
+
+    public Task DeleteLiveAsync()
+        => DeleteDirSafeAsync(_cfg.LivePath);
+
+    public Task DeleteCopyAsync()
+        => DeleteDirSafeAsync(_cfg.CopyPath);
+
+    static async Task MirrorAsync(string src, string dst, CancellationToken ct)
     {
-        var copyRoot = profile.CopyRoot;
-        if (!string.IsNullOrWhiteSpace(copyRoot) && Directory.Exists(copyRoot))
-            Directory.Delete(copyRoot, true);
-        return Task.CompletedTask;
+        if (!Directory.Exists(src)) return;
+        Directory.CreateDirectory(dst);
+
+        // copy directories (excluding .git)
+        foreach (var dir in Directory.EnumerateDirectories(src, "*", SearchOption.AllDirectories))
+        {
+            if (dir.Contains(Path.DirectorySeparatorChar + ".git" + Path.DirectorySeparatorChar)) continue;
+            var rel = Path.GetRelativePath(src, dir);
+            Directory.CreateDirectory(Path.Combine(dst, rel));
+        }
+
+        // copy files (excluding anything inside .git)
+        foreach (var file in Directory.EnumerateFiles(src, "*", SearchOption.AllDirectories))
+        {
+            if (file.Contains(Path.DirectorySeparatorChar + ".git" + Path.DirectorySeparatorChar)) continue;
+
+            var rel = Path.GetRelativePath(src, file);
+            var target = Path.Combine(dst, rel);
+            Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+
+            // remove readonly if exists
+            try
+            {
+                if (File.Exists(target))
+                {
+                    var attrs = File.GetAttributes(target);
+                    if ((attrs & FileAttributes.ReadOnly) != 0)
+                        File.SetAttributes(target, attrs & ~FileAttributes.ReadOnly);
+                }
+                File.Copy(file, target, overwrite: true);
+            }
+            catch
+            {
+                // best-effort: skip locked files
+            }
+
+            ct.ThrowIfCancellationRequested();
+        }
+
+        await Task.CompletedTask;
     }
 
-    public Task CreateBaseFoldersAsync(ServerProfileVM profile)
+    static Task DeleteDirSafeAsync(string path)
     {
-        if (!string.IsNullOrWhiteSpace(profile.LiveRoot))
-            Directory.CreateDirectory(profile.LiveRoot);
-        if (!string.IsNullOrWhiteSpace(profile.CopyRoot))
-            Directory.CreateDirectory(profile.CopyRoot);
-        if (!string.IsNullOrWhiteSpace(profile.BackupRoot))
-            Directory.CreateDirectory(profile.BackupRoot);
+        if (!Directory.Exists(path)) return Task.CompletedTask;
+
+        foreach (var file in Directory.EnumerateFiles(path, "*", SearchOption.AllDirectories))
+        {
+            try
+            {
+                var attrs = File.GetAttributes(file);
+                if ((attrs & FileAttributes.ReadOnly) != 0)
+                    File.SetAttributes(file, attrs & ~FileAttributes.ReadOnly);
+                File.Delete(file);
+            }
+            catch { /* ignore */ }
+        }
+
+        try { Directory.Delete(path, recursive: true); } catch { /* ignore */ }
         return Task.CompletedTask;
     }
 }
