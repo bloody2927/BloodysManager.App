@@ -2,248 +2,420 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:conv="clr-namespace:BloodysManager.App.Views.Converters"
-        Title="BloodysManager"
-        Height="720"
-        Width="1100"
+        Title="Bloodys Manager"
+        MinWidth="1200"
+        MinHeight="720"
         WindowStartupLocation="CenterScreen">
-  <Window.Resources>
-    <conv:BoolToBrushConverter x:Key="BoolToBrush"/>
-    <Style x:Key="FrameBorder" TargetType="Border">
-      <Setter Property="BorderBrush" Value="#444"/>
-      <Setter Property="BorderThickness" Value="2"/>
-      <Setter Property="CornerRadius" Value="6"/>
-      <Setter Property="Padding" Value="12"/>
-      <Setter Property="Margin" Value="8"/>
-    </Style>
-  </Window.Resources>
+    <Window.Resources>
+        <conv:BoolToBrushConverter x:Key="BoolToBrush" />
+    </Window.Resources>
 
-  <DockPanel>
-    <Menu DockPanel.Dock="Top">
-      <MenuItem Header="{Binding L[MenuFile]}">
-        <MenuItem Header="{Binding L[MenuSetPathLive]}" Command="{Binding CmdSetPathLive}"/>
-        <MenuItem Header="{Binding L[MenuSetPathCopy]}" Command="{Binding CmdSetPathCopy}"/>
-        <MenuItem Header="{Binding L[MenuSetPathBackup]}" Command="{Binding CmdSetPathBackup}"/>
-        <MenuItem Header="{Binding L[MenuSetPathBackupUpdate]}" Command="{Binding CmdSetPathBackupZip}"/>
-        <Separator/>
-        <MenuItem Header="{Binding L[MenuExit]}" Command="{Binding CmdExit}"/>
-      </MenuItem>
-      <MenuItem Header="{Binding L[MenuSettings]}" Command="{Binding CmdOpenSettings}"/>
-      <MenuItem Header="{Binding L[MenuCredits]}" Command="{Binding CmdOpenCredits}"/>
-      <MenuItem Header="{Binding L[MenuLanguage]}">
-        <MenuItem Header="Deutsch" Command="{Binding CmdLangDE}"/>
-        <MenuItem Header="English" Command="{Binding CmdLangEN}"/>
-      </MenuItem>
-    </Menu>
+    <DockPanel LastChildFill="True">
+        <Menu DockPanel.Dock="Top">
+            <MenuItem Header="{Binding L[MenuFile]}">
+                <MenuItem Header="{Binding L[MenuSetPathLive]}" Command="{Binding CmdSetPathLive}" />
+                <MenuItem Header="{Binding L[MenuSetPathCopy]}" Command="{Binding CmdSetPathCopy}" />
+                <MenuItem Header="{Binding L[MenuSetPathBackup]}" Command="{Binding CmdSetPathBackup}" />
+                <MenuItem Header="{Binding L[MenuSetPathBackupUpdate]}" Command="{Binding CmdSetPathBackupZip}" />
+                <Separator />
+                <MenuItem Header="{Binding L[MenuExit]}" Command="{Binding CmdExit}" />
+            </MenuItem>
+            <MenuItem Header="{Binding L[MenuSettings]}" Command="{Binding CmdOpenSettings}" />
+            <MenuItem Header="{Binding L[MenuCredits]}" Command="{Binding CmdOpenCredits}" />
+            <MenuItem Header="{Binding L[MenuLanguage]}">
+                <MenuItem Header="Deutsch" Command="{Binding CmdLangDE}" />
+                <MenuItem Header="English" Command="{Binding CmdLangEN}" />
+            </MenuItem>
+        </Menu>
 
-    <ScrollViewer VerticalScrollBarVisibility="Auto">
-      <StackPanel Margin="12">
-        <Border Style="{StaticResource FrameBorder}">
-          <StackPanel>
-            <TextBlock Text="{Binding AppTitle}" FontFamily="Consolas" FontSize="36"
-                       Foreground="#FFEE4B4B" FontWeight="Bold" HorizontalAlignment="Center"/>
-            <ComboBox ItemsSource="{Binding Profiles}" SelectedItem="{Binding ActiveProfile}" DisplayMemberPath="Name"
-                      Margin="0,16,0,0" Width="320" HorizontalAlignment="Center"/>
-            <Button Content="{Binding BtnCreateStruct}" Command="{Binding CmdCreateFolders}"
-                    Margin="0,16,0,0" Padding="10" HorizontalAlignment="Center" Width="280"/>
-          </StackPanel>
-        </Border>
+        <ScrollViewer VerticalScrollBarVisibility="Auto">
+            <Grid Margin="24">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
 
-        <Border Style="{StaticResource FrameBorder}">
-          <StackPanel>
-            <TextBlock Text="Pfadstatus" FontWeight="Bold" Margin="0,0,0,8"/>
-            <Grid Margin="0,4,0,0">
-              <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="Auto"/>
-                <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="Auto"/>
-              </Grid.ColumnDefinitions>
-              <Grid.RowDefinitions>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="Auto"/>
-              </Grid.RowDefinitions>
+                <!-- Title -->
+                <StackPanel Grid.Row="0" Margin="0,0,0,16" HorizontalAlignment="Center">
+                    <TextBlock Text="Bloodys Manager"
+                               FontSize="36"
+                               FontWeight="Bold"
+                               Foreground="#FF333333"
+                               HorizontalAlignment="Center" />
+                    <StackPanel Orientation="Horizontal" Margin="0,12,0,0" HorizontalAlignment="Center">
+                        <TextBlock Text="{Binding L[LblProfile], FallbackValue=Profile, TargetNullValue=Profile}"
+                                   VerticalAlignment="Center"
+                                   Margin="0,0,12,0"
+                                   FontWeight="SemiBold" />
+                        <ComboBox Width="260"
+                                  ItemsSource="{Binding Profiles}"
+                                  SelectedItem="{Binding ActiveProfile}"
+                                  DisplayMemberPath="Name"
+                                  Margin="0,0,12,0" />
+                        <Button Content="{Binding BtnCreateStruct}"
+                                Command="{Binding CmdCreateFolders}"
+                                Style="{StaticResource SecondaryButtonStyle}" />
+                    </StackPanel>
+                </StackPanel>
 
-              <TextBlock Text="Live" VerticalAlignment="Center" Margin="0,0,12,0"/>
-              <Rectangle Grid.Column="0" Grid.Row="0" Width="12" Height="12" RadiusX="2" RadiusY="2" Fill="{Binding ActiveProfile.ExistsLive, Converter={StaticResource BoolToBrush}}" VerticalAlignment="Center"/>
-              <TextBox Grid.Column="1" Grid.Row="0" Margin="6,0,6,6"
-                       Text="{Binding ActiveProfile.LivePath, UpdateSourceTrigger=PropertyChanged}"
-                       ToolTip="{Binding ActiveProfile.LivePath}">
-                <TextBox.ContextMenu>
-                  <ContextMenu>
-                    <MenuItem Header="Explorer öffnen"
-                              Command="{Binding DataContext.CmdOpenPathInExplorer, RelativeSource={RelativeSource AncestorType=Window}}"
-                              CommandParameter="{Binding Text, RelativeSource={RelativeSource AncestorType=TextBox}}"/>
-                    <MenuItem Header="Ordner anlegen"
-                              Command="{Binding DataContext.CmdCreatePathDir, RelativeSource={RelativeSource AncestorType=Window}}"
-                              CommandParameter="{Binding Text, RelativeSource={RelativeSource AncestorType=TextBox}}"/>
-                  </ContextMenu>
-                </TextBox.ContextMenu>
-              </TextBox>
-              <StackPanel Grid.Column="2" Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center">
-                <Button Content="…" Width="32" Command="{Binding CmdSetPathLive}" Margin="0,0,4,0"/>
-                <Button Content="📂" Width="32" Command="{Binding CmdOpenLiveInExplorer}" ToolTip="Explorer öffnen"/>
-                <Button Content="＋" Width="32" Command="{Binding CmdCreateLiveDir}" ToolTip="Ordner anlegen"/>
-              </StackPanel>
+                <!-- Server columns -->
+                <ItemsControl Grid.Row="1" ItemsSource="{Binding Profiles}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <UniformGrid Columns="5" />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border Style="{StaticResource CardBorderStyle}">
+                                <StackPanel>
+                                    <TextBlock Text="{Binding Name}" FontWeight="Bold" FontSize="16" HorizontalAlignment="Center" />
 
-              <TextBlock Grid.Row="1" Text="Copy" VerticalAlignment="Center" Margin="0,0,12,0"/>
-              <Rectangle Grid.Column="0" Grid.Row="1" Width="12" Height="12" RadiusX="2" RadiusY="2" Fill="{Binding ActiveProfile.ExistsCopy, Converter={StaticResource BoolToBrush}}" VerticalAlignment="Center"/>
-              <TextBox Grid.Column="1" Grid.Row="1" Margin="6,0,6,6"
-                       Text="{Binding ActiveProfile.CopyPath, UpdateSourceTrigger=PropertyChanged}"
-                       ToolTip="{Binding ActiveProfile.CopyPath}">
-                <TextBox.ContextMenu>
-                  <ContextMenu>
-                    <MenuItem Header="Explorer öffnen"
-                              Command="{Binding DataContext.CmdOpenPathInExplorer, RelativeSource={RelativeSource AncestorType=Window}}"
-                              CommandParameter="{Binding Text, RelativeSource={RelativeSource AncestorType=TextBox}}"/>
-                    <MenuItem Header="Ordner anlegen"
-                              Command="{Binding DataContext.CmdCreatePathDir, RelativeSource={RelativeSource AncestorType=Window}}"
-                              CommandParameter="{Binding Text, RelativeSource={RelativeSource AncestorType=TextBox}}"/>
-                  </ContextMenu>
-                </TextBox.ContextMenu>
-              </TextBox>
-              <StackPanel Grid.Column="2" Grid.Row="1" Orientation="Horizontal" VerticalAlignment="Center">
-                <Button Content="…" Width="32" Command="{Binding CmdSetPathCopy}" Margin="0,0,4,0"/>
-                <Button Content="📂" Width="32" Command="{Binding CmdOpenCopyInExplorer}" ToolTip="Explorer öffnen"/>
-                <Button Content="＋" Width="32" Command="{Binding CmdCreateCopyDir}" ToolTip="Ordner anlegen"/>
-              </StackPanel>
+                                    <!-- Live path -->
+                                    <Grid Margin="0,12,0,0">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <Ellipse Style="{StaticResource StatusDotStyle}"
+                                                 Fill="{Binding ExistsLive, Converter={StaticResource BoolToBrush}}" />
+                                        <TextBox Grid.Column="1"
+                                                 Style="{StaticResource PathTextBoxStyle}"
+                                                 Text="{Binding LivePath, UpdateSourceTrigger=PropertyChanged}"
+                                                 Tag="{Binding}"
+                                                 GotFocus="OnProfileElementGotFocus">
+                                            <TextBox.ToolTip>
+                                                <StackPanel>
+                                                    <TextBlock Text="Live server folder" FontWeight="SemiBold" />
+                                                    <TextBlock Text="{Binding LivePath}" />
+                                                </StackPanel>
+                                            </TextBox.ToolTip>
+                                            <TextBox.ContextMenu>
+                                                <ContextMenu>
+                                                    <MenuItem Header="Open in Explorer"
+                                                              Command="{Binding DataContext.CmdOpenPathInExplorer, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                              CommandParameter="{Binding Text, RelativeSource={RelativeSource AncestorType=TextBox}}" />
+                                                    <MenuItem Header="Create Folder"
+                                                              Command="{Binding DataContext.CmdCreatePathDir, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                              CommandParameter="{Binding Text, RelativeSource={RelativeSource AncestorType=TextBox}}" />
+                                                </ContextMenu>
+                                            </TextBox.ContextMenu>
+                                        </TextBox>
+                                        <Button Grid.Column="2"
+                                                Content="..."
+                                                Width="32"
+                                                Height="32"
+                                                Tag="{Binding}"
+                                                Click="OnProfileCommandClick"
+                                                Command="{Binding DataContext.CmdSetPathLive, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                ToolTip="Select Live folder" />
+                                    </Grid>
 
-              <TextBlock Grid.Row="2" Text="Backup" VerticalAlignment="Center" Margin="0,0,12,0"/>
-              <Rectangle Grid.Column="0" Grid.Row="2" Width="12" Height="12" RadiusX="2" RadiusY="2" Fill="{Binding ActiveProfile.ExistsBackup, Converter={StaticResource BoolToBrush}}" VerticalAlignment="Center"/>
-              <TextBox Grid.Column="1" Grid.Row="2" Margin="6,0,6,6"
-                       Text="{Binding ActiveProfile.BackupRoot, UpdateSourceTrigger=PropertyChanged}"
-                       ToolTip="{Binding ActiveProfile.BackupRoot}">
-                <TextBox.ContextMenu>
-                  <ContextMenu>
-                    <MenuItem Header="Explorer öffnen"
-                              Command="{Binding DataContext.CmdOpenPathInExplorer, RelativeSource={RelativeSource AncestorType=Window}}"
-                              CommandParameter="{Binding Text, RelativeSource={RelativeSource AncestorType=TextBox}}"/>
-                    <MenuItem Header="Ordner anlegen"
-                              Command="{Binding DataContext.CmdCreatePathDir, RelativeSource={RelativeSource AncestorType=Window}}"
-                              CommandParameter="{Binding Text, RelativeSource={RelativeSource AncestorType=TextBox}}"/>
-                  </ContextMenu>
-                </TextBox.ContextMenu>
-              </TextBox>
-              <StackPanel Grid.Column="2" Grid.Row="2" Orientation="Horizontal" VerticalAlignment="Center">
-                <Button Content="…" Width="32" Command="{Binding CmdSetPathBackup}" Margin="0,0,4,0"/>
-                <Button Content="📂" Width="32" Command="{Binding CmdOpenBackupInExplorer}" ToolTip="Explorer öffnen"/>
-                <Button Content="＋" Width="32" Command="{Binding CmdCreateBackupDir}" ToolTip="Ordner anlegen"/>
-              </StackPanel>
+                                    <!-- Copy path -->
+                                    <Grid Margin="0,12,0,0">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <Ellipse Style="{StaticResource StatusDotStyle}"
+                                                 Fill="{Binding ExistsCopy, Converter={StaticResource BoolToBrush}}" />
+                                        <TextBox Grid.Column="1"
+                                                 Style="{StaticResource PathTextBoxStyle}"
+                                                 Text="{Binding CopyPath, UpdateSourceTrigger=PropertyChanged}"
+                                                 Tag="{Binding}"
+                                                 GotFocus="OnProfileElementGotFocus">
+                                            <TextBox.ToolTip>
+                                                <StackPanel>
+                                                    <TextBlock Text="Copy server folder" FontWeight="SemiBold" />
+                                                    <TextBlock Text="{Binding CopyPath}" />
+                                                </StackPanel>
+                                            </TextBox.ToolTip>
+                                            <TextBox.ContextMenu>
+                                                <ContextMenu>
+                                                    <MenuItem Header="Open in Explorer"
+                                                              Command="{Binding DataContext.CmdOpenPathInExplorer, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                              CommandParameter="{Binding Text, RelativeSource={RelativeSource AncestorType=TextBox}}" />
+                                                    <MenuItem Header="Create Folder"
+                                                              Command="{Binding DataContext.CmdCreatePathDir, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                              CommandParameter="{Binding Text, RelativeSource={RelativeSource AncestorType=TextBox}}" />
+                                                </ContextMenu>
+                                            </TextBox.ContextMenu>
+                                        </TextBox>
+                                        <Button Grid.Column="2"
+                                                Content="..."
+                                                Width="32"
+                                                Height="32"
+                                                Tag="{Binding}"
+                                                Click="OnProfileCommandClick"
+                                                Command="{Binding DataContext.CmdSetPathCopy, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                ToolTip="Select Copy folder" />
+                                    </Grid>
 
-              <TextBlock Grid.Row="3" Text="Backup ZIP" VerticalAlignment="Center" Margin="0,0,12,0"/>
-              <Rectangle Grid.Column="0" Grid.Row="3" Width="12" Height="12" RadiusX="2" RadiusY="2" Fill="{Binding ActiveProfile.ExistsBackupZip, Converter={StaticResource BoolToBrush}}" VerticalAlignment="Center"/>
-              <TextBox Grid.Column="1" Grid.Row="3" Margin="6,0,6,0"
-                       Text="{Binding ActiveProfile.BackupZipRoot, UpdateSourceTrigger=PropertyChanged}"
-                       ToolTip="{Binding ActiveProfile.BackupZipRoot}">
-                <TextBox.ContextMenu>
-                  <ContextMenu>
-                    <MenuItem Header="Explorer öffnen"
-                              Command="{Binding DataContext.CmdOpenPathInExplorer, RelativeSource={RelativeSource AncestorType=Window}}"
-                              CommandParameter="{Binding Text, RelativeSource={RelativeSource AncestorType=TextBox}}"/>
-                    <MenuItem Header="Ordner anlegen"
-                              Command="{Binding DataContext.CmdCreatePathDir, RelativeSource={RelativeSource AncestorType=Window}}"
-                              CommandParameter="{Binding Text, RelativeSource={RelativeSource AncestorType=TextBox}}"/>
-                  </ContextMenu>
-                </TextBox.ContextMenu>
-              </TextBox>
-              <StackPanel Grid.Column="2" Grid.Row="3" Orientation="Horizontal" VerticalAlignment="Center">
-                <Button Content="…" Width="32" Command="{Binding CmdSetPathBackupZip}" Margin="0,0,4,0"/>
-              </StackPanel>
+                                    <!-- Backup path -->
+                                    <Grid Margin="0,12,0,0">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <Ellipse Style="{StaticResource StatusDotStyle}"
+                                                 Fill="{Binding ExistsBackup, Converter={StaticResource BoolToBrush}}" />
+                                        <TextBox Grid.Column="1"
+                                                 Style="{StaticResource PathTextBoxStyle}"
+                                                 Text="{Binding BackupRoot, UpdateSourceTrigger=PropertyChanged}"
+                                                 Tag="{Binding}"
+                                                 GotFocus="OnProfileElementGotFocus">
+                                            <TextBox.ToolTip>
+                                                <StackPanel>
+                                                    <TextBlock Text="Backup folder" FontWeight="SemiBold" />
+                                                    <TextBlock Text="{Binding BackupRoot}" />
+                                                </StackPanel>
+                                            </TextBox.ToolTip>
+                                            <TextBox.ContextMenu>
+                                                <ContextMenu>
+                                                    <MenuItem Header="Open in Explorer"
+                                                              Command="{Binding DataContext.CmdOpenPathInExplorer, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                              CommandParameter="{Binding Text, RelativeSource={RelativeSource AncestorType=TextBox}}" />
+                                                    <MenuItem Header="Create Folder"
+                                                              Command="{Binding DataContext.CmdCreatePathDir, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                              CommandParameter="{Binding Text, RelativeSource={RelativeSource AncestorType=TextBox}}" />
+                                                </ContextMenu>
+                                            </TextBox.ContextMenu>
+                                        </TextBox>
+                                        <Button Grid.Column="2"
+                                                Content="..."
+                                                Width="32"
+                                                Height="32"
+                                                Tag="{Binding}"
+                                                Click="OnProfileCommandClick"
+                                                Command="{Binding DataContext.CmdSetPathBackup, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                ToolTip="Select Backup folder" />
+                                    </Grid>
+                                </StackPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <!-- Action buttons row 1 -->
+                <UniformGrid Grid.Row="2" Columns="4" Margin="0,24,0,0">
+                    <Button Content="1) Download/Update"
+                            Style="{StaticResource RoundedActionButtonStyle}"
+                            Background="{StaticResource AccentOrange}"
+                            Command="{Binding CmdCleanDownload}"
+                            ToolTip="Fresh clone / update download folder" />
+                    <Button Content="1) Update"
+                            Style="{StaticResource RoundedActionButtonStyle}"
+                            Background="{StaticResource AccentOrange}"
+                            Command="{Binding CmdUpdate}"
+                            ToolTip="Update Live from remote" />
+                    <Button Content="2) Live → Copy"
+                            Style="{StaticResource RoundedActionButtonStyle}"
+                            Background="{StaticResource AccentGreen}"
+                            Command="{Binding CmdCopy}"
+                            ToolTip="Mirror Live to Copy" />
+                    <Button Content="3) Retate Live"
+                            Style="{StaticResource RoundedActionButtonStyle}"
+                            Background="{StaticResource AccentGold}"
+                            Command="{Binding CmdDeleteLive}"
+                            ToolTip="Retate/cleanup Live" />
+                </UniformGrid>
+
+                <!-- Action buttons row 2 -->
+                <UniformGrid Grid.Row="3" Columns="4" Margin="0,16,0,0">
+                    <Button Content="3) Delete Live"
+                            Style="{StaticResource RoundedActionButtonStyle}"
+                            Background="{StaticResource AccentRed}"
+                            Command="{Binding CmdDeleteLive}"
+                            ToolTip="Delete the Live folder" />
+                    <Button Content="3.1) Delete Copy"
+                            Style="{StaticResource RoundedActionButtonStyle}"
+                            Background="{StaticResource AccentRed}"
+                            Command="{Binding CmdDeleteCopy}"
+                            ToolTip="Delete the Copy folder" />
+                    <Button Content="5) Rotate → Backup"
+                            Style="{StaticResource RoundedActionButtonStyle}"
+                            Background="{StaticResource AccentGold}"
+                            Command="{Binding CmdRotate}"
+                            ToolTip="Archive Live → Backup" />
+                    <Button Content="9) Exit"
+                            Style="{StaticResource RoundedActionButtonStyle}"
+                            Background="{StaticResource AccentGold}"
+                            Command="{Binding CmdExit}"
+                            ToolTip="Close the application" />
+                </UniformGrid>
+
+                <!-- Bottom section -->
+                <Grid Grid.Row="4" Margin="0,24,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="2*" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+
+                    <Grid Grid.Column="0">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+
+                        <!-- World panel -->
+                        <Border Grid.Row="0" Style="{StaticResource CardBorderStyle}" Margin="0,0,16,0">
+                            <StackPanel>
+                                <TextBlock Text="worldserver.exe" Style="{StaticResource SectionHeaderTextStyle}" />
+                                <Grid Margin="0,8,0,0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBox Grid.Column="0"
+                                             Style="{StaticResource PathTextBoxStyle}"
+                                             Text="{Binding ActiveProfile.WorldExePath, UpdateSourceTrigger=PropertyChanged}"
+                                             ToolTip="Select worldserver.exe" />
+                                    <Button Grid.Column="1"
+                                            Content="..."
+                                            Width="32"
+                                            Height="32"
+                                            Style="{StaticResource SecondaryButtonStyle}"
+                                            Command="{Binding CmdBrowseWorldExe}"
+                                            ToolTip="Select worldserver.exe" />
+                                    <StackPanel Grid.Column="2" Orientation="Horizontal">
+                                        <Button Content="Start"
+                                                Style="{StaticResource SecondaryButtonStyle}"
+                                                Background="{StaticResource AccentGreen}"
+                                                Foreground="White"
+                                                Command="{Binding CmdStartWorld}"
+                                                ToolTip="Start worldserver"
+                                                IsEnabled="{Binding IsWorldRunning, Converter={StaticResource InverseBool}}" />
+                                        <Button Content="Stop"
+                                                Style="{StaticResource SecondaryButtonStyle}"
+                                                Background="{StaticResource AccentRed}"
+                                                Foreground="White"
+                                                Command="{Binding CmdStopWorld}"
+                                                ToolTip="Stop worldserver" />
+                                    </StackPanel>
+                                </Grid>
+                                <TextBlock Margin="0,8,0,0" Text="Status:" FontWeight="SemiBold" />
+                                <TextBlock Text="{Binding IsWorldRunning}" />
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Auth panel -->
+                        <Border Grid.Row="1" Style="{StaticResource CardBorderStyle}" Margin="0,0,16,0">
+                            <StackPanel>
+                                <TextBlock Text="authserver.exe" Style="{StaticResource SectionHeaderTextStyle}" />
+                                <Grid Margin="0,8,0,0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBox Grid.Column="0"
+                                             Style="{StaticResource PathTextBoxStyle}"
+                                             Text="{Binding ActiveProfile.AuthExePath, UpdateSourceTrigger=PropertyChanged}"
+                                             ToolTip="Select authserver.exe" />
+                                    <Button Grid.Column="1"
+                                            Content="..."
+                                            Width="32"
+                                            Height="32"
+                                            Style="{StaticResource SecondaryButtonStyle}"
+                                            Command="{Binding CmdBrowseAuthExe}"
+                                            ToolTip="Select authserver.exe" />
+                                    <StackPanel Grid.Column="2" Orientation="Horizontal">
+                                        <Button Content="Start"
+                                                Style="{StaticResource SecondaryButtonStyle}"
+                                                Background="{StaticResource AccentGreen}"
+                                                Foreground="White"
+                                                Command="{Binding CmdStartAuth}"
+                                                ToolTip="Start authserver"
+                                                IsEnabled="{Binding IsAuthRunning, Converter={StaticResource InverseBool}}" />
+                                        <Button Content="Stop"
+                                                Style="{StaticResource SecondaryButtonStyle}"
+                                                Background="{StaticResource AccentRed}"
+                                                Foreground="White"
+                                                Command="{Binding CmdStopAuth}"
+                                                ToolTip="Stop authserver" />
+                                    </StackPanel>
+                                </Grid>
+                                <TextBlock Margin="0,8,0,0" Text="Status:" FontWeight="SemiBold" />
+                                <TextBlock Text="{Binding IsAuthRunning}" />
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Backup runner -->
+                        <Border Grid.Row="2" Style="{StaticResource CardBorderStyle}" Margin="0,0,16,0">
+                            <StackPanel>
+                                <TextBlock Text="Backup running" Style="{StaticResource SectionHeaderTextStyle}" />
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                    <TextBlock Text="Status:" FontWeight="SemiBold" Margin="0,0,8,0" />
+                                    <TextBlock Text="{Binding IsBusy}" />
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                                    <Button Content="Start"
+                                            Style="{StaticResource SecondaryButtonStyle}"
+                                            Background="{StaticResource AccentGold}"
+                                            Command="{Binding CmdRotate}"
+                                            ToolTip="Rotate Live to Backup" />
+                                    <Button Content="Stop"
+                                            Style="{StaticResource SecondaryButtonStyle}"
+                                            Background="{StaticResource AccentRed}"
+                                            Foreground="White"
+                                            Click="OnBackupStopClick"
+                                            ToolTip="Stop backup runner" />
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Log -->
+                        <Border Grid.Row="3" Style="{StaticResource CardBorderStyle}" Margin="0">
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="*" />
+                                </Grid.RowDefinitions>
+                                <DockPanel Grid.Row="0" LastChildFill="False" Margin="0,0,0,12">
+                                    <TextBlock Text="Live log" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                    <Button Content="{Binding L[BtnClearLog], FallbackValue=Clear}"
+                                            Command="{Binding CmdClearLog}"
+                                            Style="{StaticResource SecondaryButtonStyle}"
+                                            Margin="12,0,0,0" />
+                                </DockPanel>
+                                <Border Grid.Row="1" BorderBrush="#FFCCCCCC" BorderThickness="1" CornerRadius="6">
+                                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                        <TextBox Text="{Binding Log}"
+                                                 IsReadOnly="True"
+                                                 TextWrapping="Wrap"
+                                                 FontFamily="Consolas"
+                                                 FontSize="12"
+                                                 Background="Transparent"
+                                                 BorderThickness="0"
+                                                 AcceptsReturn="True" />
+                                    </ScrollViewer>
+                                </Border>
+                            </Grid>
+                        </Border>
+                    </Grid>
+
+                    <!-- Performance panel -->
+                    <Border Grid.Column="1" Background="Black" CornerRadius="12" Padding="20" Margin="16,0,0,0">
+                        <StackPanel>
+                            <TextBlock Text="Performance" Foreground="White" FontSize="18" FontWeight="Bold" Margin="0,0,0,12" />
+                            <TextBlock Text="CPU" Foreground="LimeGreen" FontFamily="Consolas" FontSize="18" />
+                            <TextBlock Text="RAM" Foreground="Orange" FontFamily="Consolas" FontSize="18" Margin="0,8,0,0" />
+                            <TextBlock Text="MS" Foreground="Yellow" FontFamily="Consolas" FontSize="18" Margin="0,8,0,0" />
+                            <TextBlock Text="Latency" Foreground="LightSkyBlue" FontFamily="Consolas" FontSize="18" Margin="0,8,0,12" />
+                            <Border Height="160" Background="#222" CornerRadius="8" />
+                        </StackPanel>
+                    </Border>
+                </Grid>
             </Grid>
-          </StackPanel>
-        </Border>
-
-        <Border Style="{StaticResource FrameBorder}">
-          <StackPanel>
-            <TextBlock Text="Aktionen" FontWeight="Bold" Margin="0,0,0,8"/>
-            <UniformGrid Rows="2" Columns="4" Margin="0,4,0,0">
-              <Button Content="{Binding BtnClean}" Background="#FFE3B341" Command="{Binding CmdCleanDownload}"/>
-              <Button Content="{Binding BtnUpdate}" Background="#FFE3B341" Command="{Binding CmdUpdate}"/>
-              <Button Content="{Binding BtnCopy}" Background="#FF58A55C" Command="{Binding CmdCopy}"/>
-              <Button Content="{Binding BtnCurrent}" Background="#FFE3B341" Command="{Binding CmdCurrent}"/>
-              <Button Content="{Binding BtnDeleteLive}" Background="#FFD9534F" Command="{Binding CmdDeleteLive}"/>
-              <Button Content="{Binding BtnDeleteCopy}" Background="#FFD9534F" Command="{Binding CmdDeleteCopy}"/>
-              <Button Content="{Binding BtnRotate}" Background="#FFE3B341" Command="{Binding CmdRotate}"/>
-              <Button Content="{Binding BtnExit}" Background="#FFB0B0B0" Command="{Binding CmdExit}"/>
-            </UniformGrid>
-            <StackPanel Orientation="Horizontal" Margin="0,16,0,0">
-              <Button Content="Alle: Update" Padding="12,6" Margin="0,0,6,0" Command="{Binding CmdAllUpdate}"/>
-              <Button Content="Alle: Copy" Padding="12,6" Margin="0,0,6,0" Command="{Binding CmdAllCopy}"/>
-              <Button Content="Alle: Rotate" Padding="12,6" Command="{Binding CmdAllRotate}"/>
-            </StackPanel>
-          </StackPanel>
-        </Border>
-
-        <Grid Margin="8,12,8,8">
-          <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="*"/>
-          </Grid.RowDefinitions>
-          <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="*"/>
-            <ColumnDefinition Width="*"/>
-          </Grid.ColumnDefinitions>
-
-          <GroupBox Header="worldserver.exe" Grid.Row="0" Grid.Column="0" Margin="0,0,8,8">
-            <Grid Margin="8">
-              <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="Auto"/>
-                <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="Auto"/>
-              </Grid.ColumnDefinitions>
-              <TextBlock Text="Pfad:" VerticalAlignment="Center" Margin="0,0,6,0"/>
-              <TextBox Grid.Column="1" Text="{Binding ActiveProfile.WorldExePath}" ToolTip="Leer = &lt;Live&gt;\\bin\\worldserver.exe" Margin="0,0,6,0"/>
-              <StackPanel Grid.Column="2" Orientation="Horizontal">
-                <Button Content="…" Width="32" Command="{Binding CmdBrowseWorldExe}" ToolTip="EXE wählen"/>
-                <Button Content="Start" Margin="6,0,0,0" Padding="12,4" Command="{Binding CmdStartWorld}"
-                        IsEnabled="{Binding IsWorldRunning, Converter={StaticResource InverseBool}}"/>
-                <Button Content="Stop" Margin="6,0,0,0" Padding="12,4" Command="{Binding CmdStopWorld}"/>
-              </StackPanel>
-              <TextBlock Grid.ColumnSpan="3" Margin="0,8,0,0">
-                <Run Text="Status: "/>
-                <Run Text="{Binding IsWorldRunning}"/>
-              </TextBlock>
-            </Grid>
-          </GroupBox>
-
-          <GroupBox Header="authserver.exe" Grid.Row="0" Grid.Column="1" Margin="8,0,0,8">
-            <Grid Margin="8">
-              <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="Auto"/>
-                <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="Auto"/>
-              </Grid.ColumnDefinitions>
-              <TextBlock Text="Pfad:" VerticalAlignment="Center" Margin="0,0,6,0"/>
-              <TextBox Grid.Column="1" Text="{Binding ActiveProfile.AuthExePath}" ToolTip="Leer = &lt;Live&gt;\\bin\\authserver.exe" Margin="0,0,6,0"/>
-              <StackPanel Grid.Column="2" Orientation="Horizontal">
-                <Button Content="…" Width="32" Command="{Binding CmdBrowseAuthExe}" ToolTip="EXE wählen"/>
-                <Button Content="Start" Margin="6,0,0,0" Padding="12,4" Command="{Binding CmdStartAuth}"
-                        IsEnabled="{Binding IsAuthRunning, Converter={StaticResource InverseBool}}"/>
-                <Button Content="Stop" Margin="6,0,0,0" Padding="12,4" Command="{Binding CmdStopAuth}"/>
-              </StackPanel>
-              <TextBlock Grid.ColumnSpan="3" Margin="0,8,0,0">
-                <Run Text="Status: "/>
-                <Run Text="{Binding IsAuthRunning}"/>
-              </TextBlock>
-            </Grid>
-          </GroupBox>
-
-          <GroupBox Header="Ausgabe &amp; Log" Grid.Row="1" Grid.ColumnSpan="2" Margin="0,0,0,8">
-            <DockPanel Margin="6" LastChildFill="True">
-              <Button DockPanel.Dock="Right" Content="Leeren" Padding="12,4" Command="{Binding CmdClearLog}" Margin="8,0,0,0"/>
-              <TextBlock VerticalAlignment="Center" Text="Live-Log:"/>
-            </DockPanel>
-          </GroupBox>
-
-          <Border Grid.Row="2" Grid.RowSpan="2" Grid.ColumnSpan="2" BorderBrush="#444" BorderThickness="1">
-            <ScrollViewer VerticalScrollBarVisibility="Auto">
-              <TextBox Text="{Binding Log}" IsReadOnly="True" TextWrapping="Wrap" FontFamily="Consolas" FontSize="12" AcceptsReturn="True"/>
-            </ScrollViewer>
-          </Border>
-        </Grid>
-      </StackPanel>
-    </ScrollViewer>
-  </DockPanel>
+        </ScrollViewer>
+    </DockPanel>
 </Window>

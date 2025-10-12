@@ -1,7 +1,9 @@
 namespace BloodysManager.App;
+
+using System.Windows;
 using BloodysManager.App.ViewModels;
 
-public partial class MainWindow : System.Windows.Window
+public partial class MainWindow : Window
 {
     public MainWindow()
     {
@@ -13,15 +15,48 @@ public partial class MainWindow : System.Windows.Window
 #if !DEBUG
         if (!Services.AdminService.IsElevated())
         {
-            // Falls Relaunch klappt, kehren wir aus dem Konstruktor zur¸ck (App f‰hrt gleich runter).
+            // Falls Relaunch klappt, kehren wir aus dem Konstruktor zur√ºck (App f√§hrt gleich runter).
             if (Services.AdminService.TryRelaunchAsAdmin())
                 return;
-            // Wenn abgebrochen, App l‰uft ohne Admin weiter.
+            // Wenn abgebrochen, App l√§uft ohne Admin weiter.
         }
 #endif
 
-        DataContext = new BloodysManager.App.ViewModels.MainViewModel(cfg);
+        DataContext = new MainViewModel(cfg);
 
       //  DataContext = new ViewModels.MainViewModel(cfg);
+    }
+
+    void EnsureProfileSelected(object? context)
+    {
+        if (context is ServerProfileVM profile && DataContext is MainViewModel vm && vm.ActiveProfile != profile)
+        {
+            vm.ActiveProfile = profile;
+        }
+    }
+
+    void OnProfileElementGotFocus(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement element)
+        {
+            EnsureProfileSelected(element.DataContext);
+        }
+    }
+
+    void OnProfileCommandClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement element)
+        {
+            EnsureProfileSelected(element.DataContext);
+        }
+    }
+
+    void OnBackupStopClick(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is MainViewModel vm)
+        {
+            vm.IsBusy = false;
+            vm.Log += "Backup runner stop requested." + System.Environment.NewLine;
+        }
     }
 }
