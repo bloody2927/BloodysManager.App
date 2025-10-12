@@ -16,6 +16,10 @@
     <Product>BloodysManager</Product>
     <Authors>bloody2927</Authors>
   </PropertyGroup>
+  <PropertyGroup>
+    <!-- Helps ResourceManager pick the right satellite resources -->
+    <NeutralLanguage>en</NeutralLanguage>
+  </PropertyGroup>
   <ItemGroup>
     <None Include="appsettings.json" CopyToOutputDirectory="Always" />
   </ItemGroup>
@@ -29,5 +33,13 @@
     <Page Update="MainWindow.xaml">
       <Generator></Generator>
     </Page>
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Resources\Strings.resx">
+      <Generator>PublicResXFileCodeGenerator</Generator>
+      <LastGenOutput>Strings.Designer.cs</LastGenOutput>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Resources\Strings.de.resx" />
+    <EmbeddedResource Include="Resources\Strings.en.resx" />
   </ItemGroup>
 </Project>
