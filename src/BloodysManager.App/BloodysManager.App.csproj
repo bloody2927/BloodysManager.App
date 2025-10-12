@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk.WindowsDesktop">
+<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
@@ -9,32 +9,18 @@
     <AssemblyName>BloodysManager</AssemblyName>
     <RootNamespace>BloodysManager.App</RootNamespace>
     <Platforms>AnyCPU;x64</Platforms>
-    <!-- Prevent the SDK from auto-including all .resx as EmbeddedResource (causes duplicates) -->
-    <EnableDefaultEmbeddedResourceItems>false</EnableDefaultEmbeddedResourceItems>
+    <EnableDefaultItems>true</EnableDefaultItems>
+    <GenerateResourceUsePreserializedResources>true</GenerateResourceUsePreserializedResources>
   </PropertyGroup>
+
   <ItemGroup>
     <None Include="appsettings.json" CopyToOutputDirectory="Always" />
   </ItemGroup>
+
   <ItemGroup>
     <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="9.0.9">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
-  </ItemGroup>
-  <!-- Explicitly include only the resources we need -->
-  <ItemGroup>
-    <!-- Neutral culture -->
-    <EmbeddedResource Include="Resources\Strings.resx">
-      <Generator>PublicResXFileCodeGenerator</Generator>
-      <LastGenOutput>Strings.Designer.cs</LastGenOutput>
-      <CustomToolNamespace>BloodysManager.App.Resources</CustomToolNamespace>
-    </EmbeddedResource>
-    <!-- Satellite culture(s) – no code file generated -->
-    <EmbeddedResource Include="Resources\Strings.en.resx" />
-  </ItemGroup>
-  <ItemGroup>
-    <Page Update="MainWindow.xaml">
-      <Generator></Generator>
-    </Page>
   </ItemGroup>
 </Project>

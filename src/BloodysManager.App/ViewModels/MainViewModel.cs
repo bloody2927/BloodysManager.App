@@ -119,8 +119,8 @@ public sealed class MainViewModel : INotifyPropertyChanged
     {
         _cfg = cfg;
         L = new Localizer(cfg);
-        _git = new(_shell, _cfg);
-        _copy = new(_shell, _cfg);
+        _git = new(_cfg);
+        _copy = new(_cfg);
         _backup = new(_cfg);
 
         _repoUrl = _cfg.RepositoryUrl;

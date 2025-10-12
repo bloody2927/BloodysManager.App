@@ -8,6 +8,11 @@ public sealed class Config
     public string RepositoryUrl { get; set; } =
         "https://github.com/azerothcore/azerothcore-wotlk.git";
 
+    public string? RepositoryRef { get; set; }
+        = "main";
+
+    public string Language { get; set; } = "en";
+
     public string LivePath { get; set; } =
         @"B:\\Server\\Live\\azerothcore-wotlk";
 

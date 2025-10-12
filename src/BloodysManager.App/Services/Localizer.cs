@@ -1,4 +1,6 @@
+using System;
 using System.ComponentModel;
+using System.Globalization;
 using System.Resources;
 
 namespace BloodysManager.App.Services;
@@ -7,24 +9,51 @@ public sealed class Localizer : INotifyPropertyChanged
 {
     public event PropertyChangedEventHandler? PropertyChanged;
 
-    readonly Config _cfg;
-    readonly ResourceManager _rm;
+    private readonly Config _cfg;
+    private readonly ResourceManager _resourceManager;
 
     public Localizer(Config cfg)
     {
         _cfg = cfg;
-        _rm = new ResourceManager("BloodysManager.App.Resources.Strings", typeof(Localizer).Assembly);
-        CurrentLanguage = "en";
+        _resourceManager = new ResourceManager("BloodysManager.App.Resources.Strings", typeof(Localizer).Assembly);
+        SetLanguage(_cfg.Language);
     }
 
-    public string this[string key] => _rm.GetString(key) ?? key;
+    public string this[string key]
+    {
+        get
+        {
+            try
+            {
+                var value = _resourceManager.GetString(key);
+                return string.IsNullOrEmpty(value) ? key : value;
+            }
+            catch (MissingManifestResourceException)
+            {
+                return key;
+            }
+        }
+    }
 
     public string CurrentLanguage { get; private set; } = "en";
 
-    // no-op now (we keep signature for minimal impact)
     public void SetLanguage(string lang)
     {
-        CurrentLanguage = "en";
+        if (string.IsNullOrWhiteSpace(lang) || lang.Equals("en", StringComparison.OrdinalIgnoreCase))
+        {
+            CultureInfo.CurrentCulture = CultureInfo.InvariantCulture;
+            CultureInfo.CurrentUICulture = CultureInfo.InvariantCulture;
+            CurrentLanguage = "en";
+        }
+        else
+        {
+            var culture = new CultureInfo(lang);
+            CultureInfo.CurrentCulture = culture;
+            CultureInfo.CurrentUICulture = culture;
+            CurrentLanguage = culture.Name;
+        }
+
         PropertyChanged?.Invoke(this, new(nameof(CurrentLanguage)));
+        PropertyChanged?.Invoke(this, new("Item[]"));
     }
 }
