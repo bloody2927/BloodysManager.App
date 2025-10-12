@@ -20,6 +20,10 @@ public partial class MainWindow : Window
         }
 #endif
 
-        DataContext = new MainViewModel(cfg);
+        var git = new GitService(cfg);
+        var copy = new CopyService(cfg);
+        var backup = new BackupService(cfg);
+
+        DataContext = new MainViewModel(cfg, git, copy, backup);
     }
 }

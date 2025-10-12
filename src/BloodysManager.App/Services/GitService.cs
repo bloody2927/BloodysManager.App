@@ -94,6 +94,27 @@ public sealed class GitService
         return CleanCloneAsync(ct, null, null);
     }
 
+    public async Task<string> CleanCloneToDownloadAsync(CancellationToken ct)
+    {
+        var repo = _cfg.RepositoryUrl?.Trim();
+        if (string.IsNullOrWhiteSpace(repo))
+            throw new InvalidOperationException("Repository URL is not configured.");
+
+        var target = _cfg.DownloadPath?.Trim();
+        if (string.IsNullOrWhiteSpace(target))
+            throw new InvalidOperationException("Download path is not configured.");
+
+        var fullTarget = Path.GetFullPath(target);
+        var baseDir = Path.GetDirectoryName(fullTarget);
+        if (!string.IsNullOrEmpty(baseDir))
+        {
+            FileUtil.EnsureDirectory(baseDir, hardenedForCurrentUser: true);
+        }
+
+        var head = await CloneFreshAsync(repo, null, fullTarget, ct).ConfigureAwait(false);
+        return head;
+    }
+
     public async Task<string> CleanCloneAsync(CancellationToken ct, string? destination, string? repositoryUrl)
     {
         var repo = string.IsNullOrWhiteSpace(repositoryUrl) ? _cfg.RepositoryUrl : repositoryUrl;

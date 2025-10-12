@@ -13,7 +13,7 @@
     <DockPanel LastChildFill="True">
         <Menu DockPanel.Dock="Top">
             <MenuItem Header="File">
-                <MenuItem Header="Save Repository URL" Command="{Binding CmdSaveRepoUrl}" />
+                <MenuItem Header="Save Configuration" Command="{Binding CmdSaveConfig}" />
                 <Separator />
                 <MenuItem Header="Exit" Command="{Binding CmdExit}" />
             </MenuItem>
@@ -28,20 +28,25 @@
                            FontWeight="Bold"
                            HorizontalAlignment="Center" />
 
-                <Border Style="{StaticResource CardBorderStyle}">
-                    <StackPanel>
-                        <TextBlock Text="Repository" Style="{StaticResource SectionHeaderTextStyle}" />
-                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                            <TextBox Width="420"
-                                     Style="{StaticResource PathTextBoxStyle}"
-                                     Text="{Binding RepoUrl, UpdateSourceTrigger=PropertyChanged}" />
-                            <Button Content="Save"
-                                    Style="{StaticResource SecondaryButtonStyle}"
-                                    Command="{Binding CmdSaveRepoUrl}"
-                                    Margin="8,0,0,0" />
-                        </StackPanel>
+                <GroupBox Header="Repository" Margin="10">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBox Width="600"
+                                 Text="{Binding RepositoryUrl, UpdateSourceTrigger=PropertyChanged}"
+                                 ToolTip="Git repository URL (e.g. https://github.com/azerothcore/azerothcore-wotlk.git)"/>
+                        <Button Content="Save" Margin="8,0,0,0" Command="{Binding CmdSaveConfig}"/>
                     </StackPanel>
-                </Border>
+                </GroupBox>
+
+                <GroupBox Header="Download Target" Margin="10,0,10,10">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBox Width="600"
+                                 Text="{Binding DownloadPath, UpdateSourceTrigger=PropertyChanged}"
+                                 ToolTip="Target folder for clean clone"/>
+                        <Button Content="..." Width="34" Margin="8,0,0,0" Command="{Binding CmdBrowseDownloadPath}"
+                                ToolTip="Browse for download target"/>
+                        <Button Content="Save" Margin="8,0,0,0" Command="{Binding CmdSaveConfig}"/>
+                    </StackPanel>
+                </GroupBox>
 
                 <Border Style="{StaticResource CardBorderStyle}">
                     <StackPanel>
@@ -147,7 +152,8 @@
                     <Button Content="Download"
                             Style="{StaticResource RoundedActionButtonStyle}"
                             Background="{StaticResource AccentOrange}"
-                            Command="{Binding CmdCleanDownload}" />
+                            Command="{Binding CmdDownload}"
+                            ToolTip="Clean clone repository into the configured DownloadPath" />
                     <Button Content="Update"
                             Style="{StaticResource RoundedActionButtonStyle}"
                             Background="{StaticResource AccentOrange}"

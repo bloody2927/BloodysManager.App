@@ -32,6 +32,10 @@ public sealed class MainViewModel : INotifyPropertyChanged
     readonly CopyService _copy;
     readonly BackupService _backup;
 
+    string _repositoryUrl = string.Empty;
+    string _downloadPath = string.Empty;
+    bool _busy;
+
     public Localizer L { get; }
 
     readonly ObservableCollection<ServerProfile> _profiles = new();
@@ -64,17 +68,16 @@ public sealed class MainViewModel : INotifyPropertyChanged
         }
     }
 
-    string _repoUrl;
-    public string RepoUrl
+    public string RepositoryUrl
     {
-        get => _repoUrl;
-        set
-        {
-            if (Set(ref _repoUrl, value))
-            {
-                _cfg.RepositoryUrl = value;
-            }
-        }
+        get => _repositoryUrl;
+        set => Set(ref _repositoryUrl, value);
+    }
+
+    public string DownloadPath
+    {
+        get => _downloadPath;
+        set => Set(ref _downloadPath, value);
     }
 
     string _log = string.Empty;
@@ -84,12 +87,15 @@ public sealed class MainViewModel : INotifyPropertyChanged
         set => Set(ref _log, value);
     }
 
-    bool _busy;
     public bool IsBusy
     {
         get => _busy;
         set => Set(ref _busy, value);
     }
+
+    public ICommand CmdSaveConfig { get; }
+    public ICommand CmdBrowseDownloadPath { get; }
+    public ICommand CmdDownload { get; }
 
     bool _existsLive, _existsCopy, _existsBackup, _existsBackupZip;
     public bool ExistsLive
@@ -115,15 +121,33 @@ public sealed class MainViewModel : INotifyPropertyChanged
 
     public string AppTitle => "Bloody's Manager";
 
-    public MainViewModel(Config cfg)
+    public MainViewModel(Config cfg, GitService git, CopyService copy, BackupService backup)
     {
         _cfg = cfg;
         L = new Localizer(cfg);
-        _git = new(_cfg);
-        _copy = new(_cfg);
-        _backup = new(_cfg);
+        _git = git;
+        _copy = copy;
+        _backup = backup;
 
-        _repoUrl = _cfg.RepositoryUrl;
+        RepositoryUrl = _cfg.RepositoryUrl ?? string.Empty;
+        DownloadPath = _cfg.DownloadPath ?? string.Empty;
+
+        CmdSaveConfig = new Relay(_ => SaveConfig(), () => !IsBusy);
+        CmdBrowseDownloadPath = new Relay(_ => BrowseDownloadPath(), () => !IsBusy);
+        CmdDownload = new Relay(async _ => await DownloadAsync(),
+            () => !IsBusy
+                  && !string.IsNullOrWhiteSpace(RepositoryUrl)
+                  && !string.IsNullOrWhiteSpace(DownloadPath));
+
+        PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName is nameof(IsBusy) or nameof(RepositoryUrl) or nameof(DownloadPath))
+            {
+                (CmdSaveConfig as Relay)?.RiseCanExecuteChanged();
+                (CmdBrowseDownloadPath as Relay)?.RiseCanExecuteChanged();
+                (CmdDownload as Relay)?.RiseCanExecuteChanged();
+            }
+        };
 
         var initialProfile = new ServerProfile
         {
@@ -173,6 +197,44 @@ public sealed class MainViewModel : INotifyPropertyChanged
         ExistsBackupZip = Directory.Exists(p.PathBackupZip);
     }
 
+    void SaveConfig()
+    {
+        _cfg.RepositoryUrl = RepositoryUrl?.Trim() ?? string.Empty;
+        _cfg.DownloadPath = DownloadPath?.Trim() ?? string.Empty;
+        _cfg.Save();
+        Ok("Configuration saved.");
+    }
+
+    void BrowseDownloadPath()
+    {
+        using var dlg = new FolderBrowserDialog
+        {
+            Description = "Choose download target folder",
+            ShowNewFolderButton = true
+        };
+        if (dlg.ShowDialog() == DialogResult.OK && !string.IsNullOrWhiteSpace(dlg.SelectedPath))
+        {
+            DownloadPath = dlg.SelectedPath;
+            _cfg.DownloadPath = DownloadPath;
+            _cfg.Save();
+            Ok($"Download path set: {DownloadPath}");
+        }
+    }
+
+    async Task DownloadAsync()
+    {
+        await Guard(async ct =>
+        {
+            _cfg.RepositoryUrl = RepositoryUrl?.Trim() ?? string.Empty;
+            _cfg.DownloadPath = DownloadPath?.Trim() ?? string.Empty;
+
+            Ok($"Download started from: '{_cfg.RepositoryUrl}'");
+            Ok($"Target: '{_cfg.DownloadPath}'");
+            var head = await _git.CleanCloneToDownloadAsync(ct);
+            Ok($"Download completed. HEAD: {head}");
+        });
+    }
+
     void Ok(string s) => Log += $"[{DateTime.Now:HH:mm:ss}] ✓ {s}\n";
     void Err(string s) => Log += $"[{DateTime.Now:HH:mm:ss}] ✗ {s}\n";
 
@@ -209,7 +271,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
         {
             setter(dlg.SelectedPath);
             SyncConfigFromProfile(profile);
-            _cfg.Save(AppContext.BaseDirectory);
+            _cfg.Save();
             RefreshPathStates();
             Ok($"Updated path for {profile.Name}.");
         }
@@ -222,12 +284,6 @@ public sealed class MainViewModel : INotifyPropertyChanged
 
     public ICommand CmdOpenCredits => new Relay(_ =>
         System.Windows.MessageBox.Show("Bloody's Manager – MIT License © 2025", "Credits"));
-
-    public ICommand CmdSaveRepoUrl => new Relay(_ =>
-    {
-        _cfg.Save(AppContext.BaseDirectory);
-        Ok("Repository URL saved.");
-    });
 
     public ICommand CmdAddProfile => new Relay(_ =>
     {
@@ -297,7 +353,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
 
         await _copy.CreateBaseFoldersAsync(dlg.SelectedPath, profile);
         SyncConfigFromProfile(profile);
-        _cfg.Save(AppContext.BaseDirectory);
+        _cfg.Save();
         RefreshPathStates();
         Ok($"Folders created for {profile.Name}.");
     });
@@ -308,7 +364,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
         {
             var profile = RequireProfile();
             SyncConfigFromProfile(profile);
-            var commit = await _git.CleanCloneAsync(ct, profile.PathLive, RepoUrl);
+            var commit = await _git.CleanCloneAsync(ct, profile.PathLive, RepositoryUrl);
             RefreshPathStates();
             Ok($"Download OK ({profile.Name}: {commit})");
         });
@@ -320,7 +376,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
         {
             var profile = RequireProfile();
             SyncConfigFromProfile(profile);
-            var commit = await _git.UpdateAsync(ct, profile.PathLive, RepoUrl);
+            var commit = await _git.UpdateAsync(ct, profile.PathLive, RepositoryUrl);
             RefreshPathStates();
             Ok($"Update OK ({profile.Name}: {commit})");
         });
@@ -383,10 +439,11 @@ public sealed class Relay : ICommand
     public Relay(Action<object?> run, Func<bool>? can = null) { _run = run; _can = can; }
     public Relay(Func<object?, Task> run, Func<bool>? can = null) { _async = run; _can = can; }
     public bool CanExecute(object? p) => _can?.Invoke() ?? true;
-    public event EventHandler? CanExecuteChanged { add { } remove { } }
+    public event EventHandler? CanExecuteChanged;
+    public void RiseCanExecuteChanged() => CanExecuteChanged?.Invoke(this, EventArgs.Empty);
     public async void Execute(object? p)
     {
         if (_run != null) _run(p);
-        else if (_async != null) await _async(p ?? new object());
+        else if (_async != null) await _async(p);
     }
 }
