@@ -1,8 +1,6 @@
 using System;
+using System.Diagnostics;
 using System.IO;
-using System.IO.Compression;
-using System.Linq;
-using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -10,97 +8,139 @@ namespace BloodysManager.App.Services;
 
 public sealed class GitService
 {
-    private readonly ShellService _shell;
     private readonly Config _cfg;
 
-    public GitService(ShellService shell, Config cfg) { _shell = shell; _cfg = cfg; }
-
-    static bool GitAvailable() =>
-        (Environment.GetEnvironmentVariable("PATH") ?? "")
-        .Split(Path.PathSeparator)
-        .Select(p => Path.Combine(p, "git.exe"))
-        .Any(File.Exists);
-
-    public async Task<string> CleanCloneAsync(CancellationToken ct, string? destination = null, string? repositoryUrl = null)
+    public GitService(Config cfg)
     {
-        var dst = destination ?? _cfg.LivePath ?? throw new InvalidOperationException("Live path not configured.");
-        var repo = repositoryUrl ?? _cfg.RepositoryUrl;
-
-        if (Directory.Exists(dst)) Directory.Delete(dst, true);
-        Directory.CreateDirectory(Path.GetDirectoryName(dst) ?? dst);
-
-        if (!GitAvailable()) return await ZipFallbackAsync(repo, dst, ct);
-
-        var args = $"clone --progress --depth 1 {repo} \"{dst}\"";
-        var (code, _, err) = await _shell.RunAsync("git", args, null, ct);
-        if (code != 0) throw new Exception($"git clone failed: {err}");
-
-        var (code2, stdout2, _) = await _shell.RunAsync("git", "-C \"" + dst + "\" rev-parse HEAD", null, ct);
-        if (code2 != 0) throw new Exception("git rev-parse failed");
-
-        var commit = stdout2.Trim();
-        File.WriteAllText(Path.Combine(dst, "commit.txt"), commit);
-        return commit;
+        _cfg = cfg;
     }
 
-    public async Task<string> UpdateAsync(CancellationToken ct, string? destination = null, string? repositoryUrl = null)
+    private static async Task<(int code, string stdout, string stderr)> RunGitAsync(string args, string? workDir, CancellationToken ct)
     {
-        var dst = destination ?? _cfg.LivePath ?? throw new InvalidOperationException("Live path not configured.");
-        var repo = repositoryUrl ?? _cfg.RepositoryUrl;
-        if (Directory.Exists(Path.Combine(dst, ".git")) && GitAvailable())
+        using var process = new Process
         {
-            var (c1, _, e1) = await _shell.RunAsync("git", $"-C \"{dst}\" pull --ff-only", null, ct);
-            if (c1 != 0) throw new Exception($"git pull failed: {e1}");
+            StartInfo = new ProcessStartInfo("git", args)
+            {
+                WorkingDirectory = workDir ?? Environment.CurrentDirectory,
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true
+            }
+        };
 
-            var (c3, so3, _) = await _shell.RunAsync("git", $"-C \"{dst}\" rev-parse HEAD", null, ct);
-            if (c3 != 0) throw new Exception("git rev-parse failed");
+        process.Start();
 
-            var commit = so3.Trim();
-            File.WriteAllText(Path.Combine(dst, "commit.txt"), commit);
-            return commit;
-        }
-        return await CleanCloneAsync(ct, dst, repo);
+        var stdoutTask = process.StandardOutput.ReadToEndAsync();
+        var stderrTask = process.StandardError.ReadToEndAsync();
+
+        await process.WaitForExitAsync(ct).ConfigureAwait(false);
+        var stdout = await stdoutTask.ConfigureAwait(false);
+        var stderr = await stderrTask.ConfigureAwait(false);
+
+        return (process.ExitCode, stdout, stderr);
     }
 
-    async Task<string> ZipFallbackAsync(string repositoryUrl, string destination, CancellationToken ct)
+    private async Task<string> CloneFreshAsync(string repoUrl, string? branchOrRef, string destination, CancellationToken ct)
     {
-        var baseUrl = repositoryUrl.TrimEnd('/');
-        if (baseUrl.EndsWith(".git", StringComparison.OrdinalIgnoreCase))
-            baseUrl = baseUrl[..^4];
+        var temp = Path.Combine(Path.GetTempPath(), "bm_clone_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(temp);
 
-        string[] branches = ["master", "main"]; // try master first for legacy repos
-        foreach (var branch in branches)
+        try
         {
-            try
+            var args = $"clone -c gc.auto=0 --depth 1 {Escape(repoUrl)} {Escape(temp)}";
+            var (code, stdout, stderr) = await RunGitAsync(args, null, ct).ConfigureAwait(false);
+            if (code != 0)
             {
-                var zipUrl = $"{baseUrl}/archive/refs/heads/{branch}.zip";
-                var temp = Path.Combine(Path.GetTempPath(), "acore_" + Guid.NewGuid());
-                Directory.CreateDirectory(temp);
-                var zip = Path.Combine(temp, "repo.zip");
-
-                using var http = new HttpClient();
-                http.DefaultRequestHeaders.UserAgent.ParseAdd("BloodysManager/1.0");
-                var data = await http.GetByteArrayAsync(zipUrl, ct);
-                await File.WriteAllBytesAsync(zip, data, ct);
-
-                ZipFile.ExtractToDirectory(zip, temp);
-                var extracted = Directory.EnumerateDirectories(temp)
-                    .First();
-
-                if (Directory.Exists(destination)) Directory.Delete(destination, true);
-                Directory.Move(extracted, destination);
-
-                var tag = $"ZIP-{branch}-{DateTime.Now:yyyyMMdd-HHmm}";
-                File.WriteAllText(Path.Combine(destination, "commit.txt"), tag);
-
-                Directory.Delete(temp, true);
-                return tag;
+                throw new InvalidOperationException($"git clone failed: {stderr}\n{stdout}");
             }
-            catch
+
+            if (!string.IsNullOrWhiteSpace(branchOrRef))
             {
-                // try next branch
+                var checkoutArgs = $"-C {Escape(temp)} checkout {Escape(branchOrRef!)}";
+                var (checkoutCode, checkoutStdout, checkoutStderr) = await RunGitAsync(checkoutArgs, null, ct).ConfigureAwait(false);
+                if (checkoutCode != 0)
+                {
+                    throw new InvalidOperationException($"git checkout failed: {checkoutStderr}\n{checkoutStdout}");
+                }
             }
+
+            FileUtil.AtomicSwapDirectory(temp, destination);
+            return await GetHeadCommitAsync(destination, ct).ConfigureAwait(false);
         }
-        throw new Exception("Failed to download repository archive.");
+        catch
+        {
+            FileUtil.ForceDeleteDirectory(temp);
+            throw;
+        }
+    }
+
+    private static async Task<string> GetHeadCommitAsync(string repoDir, CancellationToken ct)
+    {
+        var (code, stdout, stderr) = await RunGitAsync($"-C {Escape(repoDir)} rev-parse HEAD", null, ct).ConfigureAwait(false);
+        if (code != 0)
+        {
+            throw new InvalidOperationException($"git rev-parse failed: {stderr}");
+        }
+
+        return stdout.Trim();
+    }
+
+    private static string Escape(string value)
+        => "\"" + value.Replace("\"", "\\\"") + "\"";
+
+    public Task<string> CleanCloneAsync(CancellationToken ct)
+    {
+        return CleanCloneAsync(ct, null, null);
+    }
+
+    public async Task<string> CleanCloneAsync(CancellationToken ct, string? destination, string? repositoryUrl)
+    {
+        var repo = string.IsNullOrWhiteSpace(repositoryUrl) ? _cfg.RepositoryUrl : repositoryUrl;
+        if (string.IsNullOrWhiteSpace(repo))
+        {
+            throw new InvalidOperationException("Repository URL is not configured.");
+        }
+
+        var target = string.IsNullOrWhiteSpace(destination) ? _cfg.LivePath : destination;
+        if (string.IsNullOrWhiteSpace(target))
+        {
+            throw new InvalidOperationException("Destination path is not configured.");
+        }
+
+        PrepareTargetDirectory(target!);
+        return await CloneFreshAsync(repo!, _cfg.RepositoryRef, target!, ct).ConfigureAwait(false);
+    }
+
+    public Task<string> UpdateAsync(CancellationToken ct)
+    {
+        return UpdateAsync(ct, null, null);
+    }
+
+    public async Task<string> UpdateAsync(CancellationToken ct, string? destination, string? repositoryUrl)
+    {
+        var repo = string.IsNullOrWhiteSpace(repositoryUrl) ? _cfg.RepositoryUrl : repositoryUrl;
+        if (string.IsNullOrWhiteSpace(repo))
+        {
+            throw new InvalidOperationException("Repository URL is not configured.");
+        }
+
+        var target = string.IsNullOrWhiteSpace(destination) ? _cfg.LivePath : destination;
+        if (string.IsNullOrWhiteSpace(target))
+        {
+            throw new InvalidOperationException("Destination path is not configured.");
+        }
+
+        PrepareTargetDirectory(target!);
+        return await CloneFreshAsync(repo!, _cfg.RepositoryRef, target!, ct).ConfigureAwait(false);
+    }
+
+    private static void PrepareTargetDirectory(string destination)
+    {
+        var parent = Path.GetDirectoryName(destination);
+        if (!string.IsNullOrEmpty(parent))
+        {
+            FileUtil.EnsureDirectory(parent, hardenedForCurrentUser: true);
+        }
     }
 }
