@@ -21,15 +21,17 @@ public sealed class GitService
         .Select(p => Path.Combine(p, "git.exe"))
         .Any(File.Exists);
 
-    public async Task<string> CleanCloneAsync(CancellationToken ct)
+    public async Task<string> CleanCloneAsync(CancellationToken ct, string? destination = null, string? repositoryUrl = null)
     {
-        var dst = _cfg.LivePath ?? throw new InvalidOperationException("Live path not configured.");
+        var dst = destination ?? _cfg.LivePath ?? throw new InvalidOperationException("Live path not configured.");
+        var repo = repositoryUrl ?? _cfg.RepositoryUrl;
+
         if (Directory.Exists(dst)) Directory.Delete(dst, true);
         Directory.CreateDirectory(Path.GetDirectoryName(dst) ?? dst);
 
-        if (!GitAvailable()) return await ZipFallbackAsync(ct);
+        if (!GitAvailable()) return await ZipFallbackAsync(repo, dst, ct);
 
-        var args = $"clone --progress --depth 1 {_cfg.RepositoryUrl} \"{dst}\"";
+        var args = $"clone --progress --depth 1 {repo} \"{dst}\"";
         var (code, _, err) = await _shell.RunAsync("git", args, null, ct);
         if (code != 0) throw new Exception($"git clone failed: {err}");
 
@@ -41,9 +43,10 @@ public sealed class GitService
         return commit;
     }
 
-    public async Task<string> UpdateAsync(CancellationToken ct)
+    public async Task<string> UpdateAsync(CancellationToken ct, string? destination = null, string? repositoryUrl = null)
     {
-        var dst = _cfg.LivePath ?? throw new InvalidOperationException("Live path not configured.");
+        var dst = destination ?? _cfg.LivePath ?? throw new InvalidOperationException("Live path not configured.");
+        var repo = repositoryUrl ?? _cfg.RepositoryUrl;
         if (Directory.Exists(Path.Combine(dst, ".git")) && GitAvailable())
         {
             var (c1, _, e1) = await _shell.RunAsync("git", $"-C \"{dst}\" pull --ff-only", null, ct);
@@ -56,12 +59,12 @@ public sealed class GitService
             File.WriteAllText(Path.Combine(dst, "commit.txt"), commit);
             return commit;
         }
-        return await CleanCloneAsync(ct);
+        return await CleanCloneAsync(ct, dst, repo);
     }
 
-    async Task<string> ZipFallbackAsync(CancellationToken ct)
+    async Task<string> ZipFallbackAsync(string repositoryUrl, string destination, CancellationToken ct)
     {
-        var baseUrl = _cfg.RepositoryUrl.TrimEnd('/');
+        var baseUrl = repositoryUrl.TrimEnd('/');
         if (baseUrl.EndsWith(".git", StringComparison.OrdinalIgnoreCase))
             baseUrl = baseUrl[..^4];
 
@@ -84,12 +87,11 @@ public sealed class GitService
                 var extracted = Directory.EnumerateDirectories(temp)
                     .First();
 
-                var livePath = _cfg.LivePath ?? throw new InvalidOperationException("Live path not configured.");
-                if (Directory.Exists(livePath)) Directory.Delete(livePath, true);
-                Directory.Move(extracted, livePath);
+                if (Directory.Exists(destination)) Directory.Delete(destination, true);
+                Directory.Move(extracted, destination);
 
                 var tag = $"ZIP-{branch}-{DateTime.Now:yyyyMMdd-HHmm}";
-                File.WriteAllText(Path.Combine(livePath, "commit.txt"), tag);
+                File.WriteAllText(Path.Combine(destination, "commit.txt"), tag);
 
                 Directory.Delete(temp, true);
                 return tag;

@@ -17,6 +17,9 @@ public sealed class Config
     public string BackupRoot { get; set; } =
         @"B:\\Server\\Backup";
 
+    public string BackupZip { get; set; } =
+        @"B:\\Server\\BackupZip";
+
     static string CfgFile(string baseDir) => Path.Combine(baseDir, "appsettings.json");
 
     public static Config Load(string baseDir)

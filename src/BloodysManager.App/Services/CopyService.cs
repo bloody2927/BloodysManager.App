@@ -1,4 +1,5 @@
 using System.IO;
+using System.Threading;
 
 namespace BloodysManager.App.Services;
 
@@ -10,7 +11,7 @@ public sealed class CopyService
     public CopyService(ShellService sh, Config cfg)
     { _sh = sh; _cfg = cfg; }
 
-    public Task CreateBaseFoldersAsync(string root, CancellationToken ct = default)
+    public Task CreateBaseFoldersAsync(string root, Models.ServerProfile? profile = null, CancellationToken ct = default)
     {
         // root\Live, root\Live_Copy, root\Backup, root\BackupZip
         var live     = Path.Combine(root, "Live", "azerothcore-wotlk");
@@ -23,10 +24,19 @@ public sealed class CopyService
         Directory.CreateDirectory(backup);
         Directory.CreateDirectory(backup7z);
 
+        if (profile is not null)
+        {
+            profile.PathLive = live;
+            profile.PathCopy = copy;
+            profile.PathBackup = backup;
+            profile.PathBackupZip = backup7z;
+        }
+
         // write back to config so the UI uses the chosen root
         _cfg.LivePath   = live;
         _cfg.CopyPath   = copy;
         _cfg.BackupRoot = backup;
+        _cfg.BackupZip  = backup7z;
 
         return Task.CompletedTask;
     }
@@ -34,14 +44,24 @@ public sealed class CopyService
     public Task MirrorLiveToCopyAsync(CancellationToken ct = default)
         => MirrorAsync(_cfg.LivePath, _cfg.CopyPath, ct);
 
+    public Task MirrorLiveToCopyAsync(CancellationToken ct, string? livePath, string? copyPath)
+        => MirrorAsync(livePath ?? _cfg.LivePath, copyPath ?? _cfg.CopyPath, ct);
+
     public Task DeleteLiveAsync()
         => DeleteDirSafeAsync(_cfg.LivePath);
+
+    public Task DeleteLiveAsync(string? path)
+        => DeleteDirSafeAsync(path ?? _cfg.LivePath);
 
     public Task DeleteCopyAsync()
         => DeleteDirSafeAsync(_cfg.CopyPath);
 
-    static async Task MirrorAsync(string src, string dst, CancellationToken ct)
+    public Task DeleteCopyAsync(string? path)
+        => DeleteDirSafeAsync(path ?? _cfg.CopyPath);
+
+    static async Task MirrorAsync(string? src, string? dst, CancellationToken ct)
     {
+        if (string.IsNullOrWhiteSpace(src) || string.IsNullOrWhiteSpace(dst)) return;
         if (!Directory.Exists(src)) return;
         Directory.CreateDirectory(dst);
 
@@ -84,9 +104,9 @@ public sealed class CopyService
         await Task.CompletedTask;
     }
 
-    static Task DeleteDirSafeAsync(string path)
+    static Task DeleteDirSafeAsync(string? path)
     {
-        if (!Directory.Exists(path)) return Task.CompletedTask;
+        if (string.IsNullOrWhiteSpace(path) || !Directory.Exists(path)) return Task.CompletedTask;
 
         foreach (var file in Directory.EnumerateFiles(path, "*", SearchOption.AllDirectories))
         {
