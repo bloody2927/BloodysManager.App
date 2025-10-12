@@ -1,7 +1,8 @@
-namespace BloodysManager.App;
-
 using System.Windows;
+using BloodysManager.App.Services;
 using BloodysManager.App.ViewModels;
+
+namespace BloodysManager.App;
 
 public partial class MainWindow : Window
 {
@@ -9,54 +10,16 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
 
-        var cfgPath = System.IO.Path.Combine(AppContext.BaseDirectory, "appsettings.json");
-        var cfg = Services.Config.Load(cfgPath);
+        var cfg = Config.Load(AppContext.BaseDirectory);
 
 #if !DEBUG
-        if (!Services.AdminService.IsElevated())
+        if (!AdminService.IsElevated())
         {
-            // Falls Relaunch klappt, kehren wir aus dem Konstruktor zurück (App fährt gleich runter).
-            if (Services.AdminService.TryRelaunchAsAdmin())
+            if (AdminService.TryRelaunchAsAdmin())
                 return;
-            // Wenn abgebrochen, App läuft ohne Admin weiter.
         }
 #endif
 
         DataContext = new MainViewModel(cfg);
-
-      //  DataContext = new ViewModels.MainViewModel(cfg);
-    }
-
-    void EnsureProfileSelected(object? context)
-    {
-        if (context is ServerProfileVM profile && DataContext is MainViewModel vm && vm.ActiveProfile != profile)
-        {
-            vm.ActiveProfile = profile;
-        }
-    }
-
-    void OnProfileElementGotFocus(object sender, RoutedEventArgs e)
-    {
-        if (sender is FrameworkElement element)
-        {
-            EnsureProfileSelected(element.DataContext);
-        }
-    }
-
-    void OnProfileCommandClick(object sender, RoutedEventArgs e)
-    {
-        if (sender is FrameworkElement element)
-        {
-            EnsureProfileSelected(element.DataContext);
-        }
-    }
-
-    void OnBackupStopClick(object sender, RoutedEventArgs e)
-    {
-        if (DataContext is MainViewModel vm)
-        {
-            vm.IsBusy = false;
-            vm.Log += "Backup runner stop requested." + System.Environment.NewLine;
-        }
     }
 }
