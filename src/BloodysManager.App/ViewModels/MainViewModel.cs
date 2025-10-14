@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.IO;
@@ -8,442 +7,383 @@ using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
-using System.Windows.Input;
 using BloodysManager.App.Models;
 using BloodysManager.App.Services;
 
 namespace BloodysManager.App.ViewModels;
 
-public sealed class MainViewModel : INotifyPropertyChanged
+public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 {
     public event PropertyChangedEventHandler? PropertyChanged;
+    void Raise([CallerMemberName] string? name = null) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
 
-    bool Set<T>(ref T field, T value, [CallerMemberName] string? n = null)
+    private readonly SynchronizationContext _syncContext;
+    private readonly ConfigService _configService;
+    private readonly GitService _gitService;
+    private readonly FileOpsService _fileService;
+    private readonly PerfService _perfService;
+    private readonly CancellationTokenSource _perfLoopCts = new();
+
+    public AppConfig Config { get; }
+    public ObservableCollection<string> Log { get; } = new();
+    public string LogText => string.Join(Environment.NewLine, Log);
+    void Append(string message)
     {
-        if (EqualityComparer<T>.Default.Equals(field, value)) return false;
-        field = value;
-        PropertyChanged?.Invoke(this, new(n));
-        return true;
+        void Write()
+        {
+            Log.Add($"[{DateTime.Now:HH:mm:ss}] {message}");
+            while (Log.Count > 500)
+                Log.RemoveAt(0);
+            Raise(nameof(LogText));
+        }
+
+        if (SynchronizationContext.Current == _syncContext)
+        {
+            Write();
+        }
+        else
+        {
+            _syncContext.Post(_ => Write(), null);
+        }
     }
 
-    readonly Config _cfg;
-    readonly ShellService _shell = new();
-    readonly GitService _git;
-    readonly CopyService _copy;
-    readonly BackupService _backup;
+    public ObservableCollection<ServerProfile> Profiles => Config.Profiles;
 
-    string _repositoryUrl = string.Empty;
-    string _downloadPath = string.Empty;
-    bool _busy;
-
-    public Localizer L { get; }
-
-    readonly ObservableCollection<ServerProfile> _profiles = new();
-    public ObservableCollection<ServerProfile> Profiles => _profiles;
-
-    ServerProfile? _selectedProfile;
-    public ServerProfile? SelectedProfile
+    private int _selectedIndex;
+    public int SelectedIndex
     {
-        get => _selectedProfile;
+        get => _selectedIndex;
         set
         {
-            if (Set(ref _selectedProfile, value) && value is not null)
-            {
-                SyncConfigFromProfile(value);
-                RefreshPathStates();
-            }
-            else if (value is null)
-            {
-                RefreshPathStates();
-            }
+            var normalized = ClampIndex(value);
+            if (_selectedIndex == normalized) return;
+            _selectedIndex = normalized;
+            Config.SelectedProfileIndex = normalized;
+            Raise();
+            Raise(nameof(SelectedProfile));
+            _configService.Save(Config);
         }
     }
 
-    void OnProfilePropertyChanged(object? sender, PropertyChangedEventArgs e)
+    private int ClampIndex(int value)
+        => Profiles.Count == 0 ? 0 : Math.Clamp(value, 0, Profiles.Count - 1);
+
+    public ServerProfile SelectedProfile
     {
-        if (sender is ServerProfile profile && profile == SelectedProfile)
+        get
         {
-            SyncConfigFromProfile(profile);
-            RefreshPathStates();
+            if (Profiles.Count == 0)
+            {
+                var profile = new ServerProfile();
+                profile.PropertyChanged += OnProfileChanged;
+                Profiles.Add(profile);
+                _selectedIndex = 0;
+            }
+            return Profiles[ClampIndex(_selectedIndex)];
         }
     }
 
-    public string RepositoryUrl
+    public MainViewModel()
     {
-        get => _repositoryUrl;
-        set => Set(ref _repositoryUrl, value);
+        _syncContext = SynchronizationContext.Current ?? new SynchronizationContext();
+        _configService = new ConfigService();
+        _gitService = new GitService();
+        _fileService = new FileOpsService();
+        _perfService = new PerfService();
+
+        Config = _configService.Load();
+        foreach (var profile in Profiles)
+            profile.PropertyChanged += OnProfileChanged;
+
+        _selectedIndex = ClampIndex(Config.SelectedProfileIndex);
+        Append("Config loaded.");
+        _ = StartPerfLoopAsync(_perfLoopCts.Token);
     }
 
-    public string DownloadPath
+    private void OnProfileChanged(object? sender, PropertyChangedEventArgs e)
     {
-        get => _downloadPath;
-        set => Set(ref _downloadPath, value);
-    }
-
-    string _log = string.Empty;
-    public string Log
-    {
-        get => _log;
-        set => Set(ref _log, value);
-    }
-
-    public bool IsBusy
-    {
-        get => _busy;
-        set => Set(ref _busy, value);
-    }
-
-    public ICommand CmdSaveConfig { get; }
-    public ICommand CmdBrowseDownloadPath { get; }
-    public ICommand CmdDownload { get; }
-
-    bool _existsLive, _existsCopy, _existsBackup, _existsBackupZip;
-    public bool ExistsLive
-    {
-        get => _existsLive;
-        private set => Set(ref _existsLive, value);
-    }
-    public bool ExistsCopy
-    {
-        get => _existsCopy;
-        private set => Set(ref _existsCopy, value);
-    }
-    public bool ExistsBackup
-    {
-        get => _existsBackup;
-        private set => Set(ref _existsBackup, value);
-    }
-    public bool ExistsBackupZip
-    {
-        get => _existsBackupZip;
-        private set => Set(ref _existsBackupZip, value);
-    }
-
-    public string AppTitle => "Bloody's Manager";
-
-    public MainViewModel(Config cfg, GitService git, CopyService copy, BackupService backup)
-    {
-        _cfg = cfg;
-        L = new Localizer(cfg);
-        _git = git;
-        _copy = copy;
-        _backup = backup;
-
-        RepositoryUrl = _cfg.RepositoryUrl ?? string.Empty;
-        DownloadPath = _cfg.DownloadPath ?? string.Empty;
-
-        CmdSaveConfig = new Relay(_ => SaveConfig(), () => !IsBusy);
-        CmdBrowseDownloadPath = new Relay(_ => BrowseDownloadPath(), () => !IsBusy);
-        CmdDownload = new Relay(async _ => await DownloadAsync(),
-            () => !IsBusy
-                  && !string.IsNullOrWhiteSpace(RepositoryUrl)
-                  && !string.IsNullOrWhiteSpace(DownloadPath));
-
-        PropertyChanged += (_, e) =>
-        {
-            if (e.PropertyName is nameof(IsBusy) or nameof(RepositoryUrl) or nameof(DownloadPath))
-            {
-                (CmdSaveConfig as Relay)?.RiseCanExecuteChanged();
-                (CmdBrowseDownloadPath as Relay)?.RiseCanExecuteChanged();
-                (CmdDownload as Relay)?.RiseCanExecuteChanged();
-            }
-        };
-
-        var initialProfile = new ServerProfile
-        {
-            Name = "Server 1",
-            PathLive = _cfg.LivePath,
-            PathCopy = _cfg.CopyPath,
-            PathBackup = _cfg.BackupRoot,
-            PathBackupZip = string.IsNullOrWhiteSpace(_cfg.BackupZip)
-                ? Path.Combine(Path.GetDirectoryName(_cfg.BackupRoot) ?? _cfg.BackupRoot, "BackupZip")
-                : _cfg.BackupZip,
-        };
-        AttachProfile(initialProfile);
-        _profiles.Add(initialProfile);
-        SelectedProfile = initialProfile;
-    }
-
-    void AttachProfile(ServerProfile profile)
-    {
-        profile.PropertyChanged += OnProfilePropertyChanged;
-    }
-
-    void DetachProfile(ServerProfile profile)
-    {
-        profile.PropertyChanged -= OnProfilePropertyChanged;
-    }
-
-    void SyncConfigFromProfile(ServerProfile profile)
-    {
-        _cfg.LivePath = profile.PathLive;
-        _cfg.CopyPath = profile.PathCopy;
-        _cfg.BackupRoot = profile.PathBackup;
-        _cfg.BackupZip = profile.PathBackupZip;
-    }
-
-    void RefreshPathStates()
-    {
-        var p = SelectedProfile;
-        if (p is null)
-        {
-            ExistsLive = ExistsCopy = ExistsBackup = ExistsBackupZip = false;
+        if (sender is not ServerProfile profile)
             return;
-        }
 
-        ExistsLive = Directory.Exists(p.PathLive);
-        ExistsCopy = Directory.Exists(p.PathCopy);
-        ExistsBackup = Directory.Exists(p.PathBackup);
-        ExistsBackupZip = Directory.Exists(p.PathBackupZip);
-    }
-
-    void SaveConfig()
-    {
-        _cfg.RepositoryUrl = RepositoryUrl?.Trim() ?? string.Empty;
-        _cfg.DownloadPath = DownloadPath?.Trim() ?? string.Empty;
-        _cfg.Save();
-        Ok("Configuration saved.");
-    }
-
-    void BrowseDownloadPath()
-    {
-        using var dlg = new FolderBrowserDialog
+        if (Profiles.Contains(profile))
         {
-            Description = "Choose download target folder",
-            ShowNewFolderButton = true
-        };
-        if (dlg.ShowDialog() == DialogResult.OK && !string.IsNullOrWhiteSpace(dlg.SelectedPath))
-        {
-            DownloadPath = dlg.SelectedPath;
-            _cfg.DownloadPath = DownloadPath;
-            _cfg.Save();
-            Ok($"Download path set: {DownloadPath}");
+            _configService.Save(Config);
+            if (profile == SelectedProfile)
+                Raise(nameof(SelectedProfile));
         }
     }
 
-    async Task DownloadAsync()
-    {
-        await Guard(async ct =>
-        {
-            _cfg.RepositoryUrl = RepositoryUrl?.Trim() ?? string.Empty;
-            _cfg.DownloadPath = DownloadPath?.Trim() ?? string.Empty;
-
-            Ok($"Download started from: '{_cfg.RepositoryUrl}'");
-            Ok($"Target: '{_cfg.DownloadPath}'");
-            var head = await _git.CleanCloneToDownloadAsync(ct);
-            Ok($"Download completed. HEAD: {head}");
-        });
-    }
-
-    void Ok(string s) => Log += $"[{DateTime.Now:HH:mm:ss}] ✓ {s}\n";
-    void Err(string s) => Log += $"[{DateTime.Now:HH:mm:ss}] ✗ {s}\n";
-
-    async Task Guard(Func<CancellationToken, Task> op)
+    private async Task StartPerfLoopAsync(CancellationToken token)
     {
         try
         {
-            IsBusy = true;
-            await op(CancellationToken.None);
+            while (!token.IsCancellationRequested)
+            {
+                var (cpu, ram) = _perfService.Sample();
+                Append($"CPU {cpu:F1}% | RAM {ram:F1}%");
+                await Task.Delay(TimeSpan.FromSeconds(30), token);
+            }
+        }
+        catch (TaskCanceledException)
+        {
+            // ignore
         }
         catch (Exception ex)
         {
-            Err(ex.Message);
-        }
-        finally
-        {
-            IsBusy = false;
+            Append($"Perf error: {ex.Message}");
         }
     }
 
-    ServerProfile RequireProfile()
+    public void SaveRepo()
     {
-        return SelectedProfile ?? throw new InvalidOperationException("No server profile selected.");
+        _configService.Save(Config);
+        Append("Repository URL saved.");
     }
 
-    void BrowseAssign(ServerProfile profile, Action<string> setter, string title)
+    public void SaveDownloadTarget()
     {
-        using var dlg = new FolderBrowserDialog
+        _configService.Save(Config);
+        Append("Download target saved.");
+    }
+
+    public void NewProfile()
+    {
+        var number = Profiles.Count + 1;
+        var profile = new ServerProfile { Name = $"Server {number}" };
+        profile.PropertyChanged += OnProfileChanged;
+        Profiles.Add(profile);
+        SelectedIndex = Profiles.Count - 1;
+        _configService.Save(Config);
+        Append($"Profile created: {profile.Name}");
+    }
+
+    public void DeleteProfile()
+    {
+        if (Profiles.Count <= 1)
         {
-            Description = title,
-            ShowNewFolderButton = true
-        };
-        if (dlg.ShowDialog() == DialogResult.OK && !string.IsNullOrWhiteSpace(dlg.SelectedPath))
+            Append("Cannot delete last profile.");
+            return;
+        }
+
+        var profile = SelectedProfile;
+        profile.PropertyChanged -= OnProfileChanged;
+        var index = SelectedIndex;
+        Profiles.Remove(profile);
+        SelectedIndex = Math.Clamp(index, 0, Profiles.Count - 1);
+        _configService.Save(Config);
+        Append($"Profile removed: {profile.Name}");
+    }
+
+    public void RenameProfile()
+    {
+        var current = SelectedProfile;
+        using var dialog = new InputBox("Rename Server", current.Name);
+        if (dialog.ShowDialog() == DialogResult.OK && !string.IsNullOrWhiteSpace(dialog.Value))
         {
-            setter(dlg.SelectedPath);
-            SyncConfigFromProfile(profile);
-            _cfg.Save();
-            RefreshPathStates();
-            Ok($"Updated path for {profile.Name}.");
+            current.Name = dialog.Value!;
+            _configService.Save(Config);
+            Append($"Profile renamed to {current.Name}");
         }
     }
 
-    public ICommand CmdExit => new Relay(_ => System.Windows.Application.Current.Shutdown());
-
-    public ICommand CmdOpenSettings => new Relay(_ =>
-        System.Windows.MessageBox.Show("Settings placeholder – edit appsettings.json.", "Settings"));
-
-    public ICommand CmdOpenCredits => new Relay(_ =>
-        System.Windows.MessageBox.Show("Bloody's Manager – MIT License © 2025", "Credits"));
-
-    public ICommand CmdAddProfile => new Relay(_ =>
+    public void Browse(Func<ServerProfile, string> getter, Action<ServerProfile, string> setter)
     {
-        var idx = _profiles.Count + 1;
-        var profile = new ServerProfile
+        var profile = SelectedProfile;
+        using var dialog = new FolderBrowserDialog { ShowNewFolderButton = true };
+        var initial = getter(profile);
+        if (!string.IsNullOrWhiteSpace(initial) && Directory.Exists(initial))
+            dialog.SelectedPath = initial;
+
+        if (dialog.ShowDialog() == DialogResult.OK && !string.IsNullOrWhiteSpace(dialog.SelectedPath))
         {
-            Name = $"Server {idx}",
-            PathLive = Path.Combine(@"B:\\Server", $"Live_{idx}", "azerothcore-wotlk"),
-            PathCopy = Path.Combine(@"B:\\Server", $"Live_Copy_{idx}", "azerothcore-wotlk-copy"),
-            PathBackup = Path.Combine(@"B:\\Server", $"Backup_{idx}"),
-            PathBackupZip = Path.Combine(@"B:\\Server", $"BackupZip_{idx}"),
+            setter(profile, dialog.SelectedPath);
+            _configService.Save(Config);
+            Append($"Path updated: {dialog.SelectedPath}");
+        }
+    }
+
+    public void CreateStructure()
+    {
+        var profile = SelectedProfile;
+        using var dialog = new FolderBrowserDialog
+        {
+            ShowNewFolderButton = true,
+            Description = "Choose root folder for server"
         };
-        AttachProfile(profile);
-        _profiles.Add(profile);
-        SelectedProfile = profile;
-        Ok($"Added profile {profile.Name}.");
-    });
 
-    public ICommand CmdRemoveProfile => new Relay(obj =>
-    {
-        if (obj is not ServerProfile profile) return;
-        if (!_profiles.Contains(profile)) return;
-
-        DetachProfile(profile);
-        _profiles.Remove(profile);
-        if (SelectedProfile == profile)
-            SelectedProfile = _profiles.FirstOrDefault();
-
-        RefreshPathStates();
-        Ok($"Removed profile {profile.Name}.");
-    });
-
-    public ICommand CmdSetPathLive => new Relay(_ =>
-    {
-        var profile = RequireProfile();
-        BrowseAssign(profile, v => profile.PathLive = v, "Select Live folder");
-    });
-
-    public ICommand CmdSetPathCopy => new Relay(_ =>
-    {
-        var profile = RequireProfile();
-        BrowseAssign(profile, v => profile.PathCopy = v, "Select Copy folder");
-    });
-
-    public ICommand CmdSetPathBackup => new Relay(_ =>
-    {
-        var profile = RequireProfile();
-        BrowseAssign(profile, v => profile.PathBackup = v, "Select Backup folder");
-    });
-
-    public ICommand CmdSetPathBackupZip => new Relay(_ =>
-    {
-        var profile = RequireProfile();
-        BrowseAssign(profile, v => profile.PathBackupZip = v, "Select Backup Zip folder");
-    });
-
-    public ICommand CmdCreateFolders => new Relay(async _ =>
-    {
-        var profile = RequireProfile();
-        using var dlg = new FolderBrowserDialog
-        {
-            Description = "Choose base folder for server structure",
-            ShowNewFolderButton = true
-        };
-        if (dlg.ShowDialog() != DialogResult.OK || string.IsNullOrWhiteSpace(dlg.SelectedPath))
+        if (dialog.ShowDialog() != DialogResult.OK || string.IsNullOrWhiteSpace(dialog.SelectedPath))
             return;
 
-        await _copy.CreateBaseFoldersAsync(dlg.SelectedPath, profile);
-        SyncConfigFromProfile(profile);
-        _cfg.Save();
-        RefreshPathStates();
-        Ok($"Folders created for {profile.Name}.");
-    });
+        var rootName = profile.Name.Replace(' ', '_');
+        var root = Path.Combine(dialog.SelectedPath, rootName);
+        var live = Path.Combine(root, "Live");
+        var copy = Path.Combine(root, "Copy");
+        var backup = Path.Combine(root, "Backup");
+        var backupZip = Path.Combine(root, "BackupZip");
 
-    public ICommand CmdCleanDownload => new Relay(async _ =>
+        _fileService.EnsureDir(live);
+        _fileService.EnsureDir(copy);
+        _fileService.EnsureDir(backup);
+        _fileService.EnsureDir(backupZip);
+
+        profile.LivePath = live;
+        profile.CopyPath = copy;
+        profile.BackupPath = backup;
+        profile.BackupZipPath = backupZip;
+        _configService.Save(Config);
+        Append($"Structure created under: {root}");
+    }
+
+    public async Task DownloadAsync()
     {
-        await Guard(async ct =>
+        try
         {
-            var profile = RequireProfile();
-            SyncConfigFromProfile(profile);
-            var commit = await _git.CleanCloneAsync(ct, profile.PathLive, RepositoryUrl);
-            RefreshPathStates();
-            Ok($"Download OK ({profile.Name}: {commit})");
-        });
-    });
+            if (string.IsNullOrWhiteSpace(Config.RepositoryUrl))
+                throw new InvalidOperationException("Repository URL is empty.");
+            if (string.IsNullOrWhiteSpace(Config.DownloadTarget))
+                throw new InvalidOperationException("Download target is empty.");
 
-    public ICommand CmdUpdate => new Relay(async _ =>
-    {
-        await Guard(async ct =>
+            Directory.CreateDirectory(Config.DownloadTarget);
+            if (Directory.Exists(Path.Combine(Config.DownloadTarget, ".git")))
+            {
+                Append("Target already contains a repository – use Update.");
+                return;
+            }
+
+            await _gitService.CloneAsync(Config.RepositoryUrl, Config.DownloadTarget, Append);
+        }
+        catch (Exception ex)
         {
-            var profile = RequireProfile();
-            SyncConfigFromProfile(profile);
-            var commit = await _git.UpdateAsync(ct, profile.PathLive, RepositoryUrl);
-            RefreshPathStates();
-            Ok($"Update OK ({profile.Name}: {commit})");
-        });
-    });
+            Append($"X {ex.Message}");
+        }
+    }
 
-    public ICommand CmdCopy => new Relay(async _ =>
+    public async Task UpdateAsync()
     {
-        await Guard(async ct =>
+        try
         {
-            var profile = RequireProfile();
-            await _copy.MirrorLiveToCopyAsync(ct, profile.PathLive, profile.PathCopy);
-            RefreshPathStates();
-            Ok($"Copy OK for {profile.Name}");
-        });
-    });
+            if (string.IsNullOrWhiteSpace(Config.RepositoryUrl))
+            {
+                Append("Repository URL is empty.");
+                return;
+            }
+            var gitDir = Path.Combine(Config.DownloadTarget, ".git");
+            if (!Directory.Exists(gitDir))
+            {
+                Append("No repository found in DownloadTarget.");
+                return;
+            }
 
-    public ICommand CmdDeleteLive => new Relay(async _ =>
-    {
-        var profile = RequireProfile();
-        if (System.Windows.MessageBox.Show($"Delete Live for {profile.Name}?", "Confirm",
-                System.Windows.MessageBoxButton.YesNo) != System.Windows.MessageBoxResult.Yes)
-            return;
-
-        await _copy.DeleteLiveAsync(profile.PathLive);
-        RefreshPathStates();
-        Ok($"Deleted Live for {profile.Name}");
-    });
-
-    public ICommand CmdDeleteCopy => new Relay(async _ =>
-    {
-        var profile = RequireProfile();
-        if (System.Windows.MessageBox.Show($"Delete Copy for {profile.Name}?", "Confirm",
-                System.Windows.MessageBoxButton.YesNo) != System.Windows.MessageBoxResult.Yes)
-            return;
-
-        await _copy.DeleteCopyAsync(profile.PathCopy);
-        RefreshPathStates();
-        Ok($"Deleted Copy for {profile.Name}");
-    });
-
-    public ICommand CmdRotate => new Relay(async _ =>
-    {
-        await Guard(async ct =>
+            await _gitService.PullAsync(Config.DownloadTarget, Append);
+        }
+        catch (Exception ex)
         {
-            var profile = RequireProfile();
-            SyncConfigFromProfile(profile);
-            var dst = await _backup.RotateAsync(_shell, _copy,
-                profile.PathCopy, profile.PathBackup, profile.PathBackupZip, ct);
-            RefreshPathStates();
-            Ok($"Backup OK → {dst}");
-        });
-    });
+            Append($"X {ex.Message}");
+        }
+    }
+
+    public async Task LiveToCopyAsync()
+    {
+        try
+        {
+            _fileService.CopyDirectoryContents(SelectedProfile.LivePath, SelectedProfile.CopyPath, Append);
+            await Task.CompletedTask;
+        }
+        catch (Exception ex)
+        {
+            Append($"X {ex.Message}");
+        }
+    }
+
+    public void DeleteLive()
+    {
+        try
+        {
+            _fileService.DeleteDirectoryContents(SelectedProfile.LivePath, Append);
+        }
+        catch (Exception ex)
+        {
+            Append($"X {ex.Message}");
+        }
+    }
+
+    public void DeleteCopy()
+    {
+        try
+        {
+            _fileService.DeleteDirectoryContents(SelectedProfile.CopyPath, Append);
+        }
+        catch (Exception ex)
+        {
+            Append($"X {ex.Message}");
+        }
+    }
+
+    public void Backup()
+    {
+        try
+        {
+            _fileService.SnapshotToBackup(SelectedProfile.LivePath, SelectedProfile.BackupPath, Append);
+        }
+        catch (Exception ex)
+        {
+            Append($"X {ex.Message}");
+        }
+    }
+
+    public void RotateBackup()
+    {
+        try
+        {
+            _fileService.RotateBackups(SelectedProfile.BackupPath, 5, Append);
+        }
+        catch (Exception ex)
+        {
+            Append($"X {ex.Message}");
+        }
+    }
+
+    public void Dispose()
+    {
+        _perfLoopCts.Cancel();
+        _perfService.Dispose();
+        _perfLoopCts.Dispose();
+        foreach (var profile in Profiles)
+            profile.PropertyChanged -= OnProfileChanged;
+    }
 }
 
-public sealed class Relay : ICommand
+public sealed class InputBox : Form
 {
-    readonly Action<object?>? _run;
-    readonly Func<bool>? _can;
-    readonly Func<object?, Task>? _async;
-    public Relay(Action<object?> run, Func<bool>? can = null) { _run = run; _can = can; }
-    public Relay(Func<object?, Task> run, Func<bool>? can = null) { _async = run; _can = can; }
-    public bool CanExecute(object? p) => _can?.Invoke() ?? true;
-    public event EventHandler? CanExecuteChanged;
-    public void RiseCanExecuteChanged() => CanExecuteChanged?.Invoke(this, EventArgs.Empty);
-    public async void Execute(object? p)
+    public string? Value => _textBox.Text;
+    private readonly TextBox _textBox = new() { Dock = DockStyle.Top };
+
+    public InputBox(string title, string initial)
     {
-        if (_run != null) _run(p);
-        else if (_async != null) await _async(p);
+        Text = title;
+        Width = 400;
+        Height = 140;
+        FormBorderStyle = FormBorderStyle.FixedDialog;
+        StartPosition = FormStartPosition.CenterParent;
+
+        Controls.Add(_textBox);
+        _textBox.Text = initial;
+
+        var buttonPanel = new FlowLayoutPanel
+        {
+            FlowDirection = FlowDirection.RightToLeft,
+            Dock = DockStyle.Bottom,
+            Padding = new Padding(10),
+            Height = 50
+        };
+
+        var ok = new Button { Text = "OK", DialogResult = DialogResult.OK, Width = 80 };
+        var cancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel, Width = 80 };
+        buttonPanel.Controls.Add(ok);
+        buttonPanel.Controls.Add(cancel);
+
+        Controls.Add(buttonPanel);
+        AcceptButton = ok;
+        CancelButton = cancel;
     }
 }
