@@ -9,8 +9,7 @@
     <AssemblyName>BloodysManager</AssemblyName>
     <RootNamespace>BloodysManager.App</RootNamespace>
     <Platforms>AnyCPU;x64</Platforms>
-    <EnableDefaultItems>true</EnableDefaultItems>
-    <GenerateResourceUsePreserializedResources>true</GenerateResourceUsePreserializedResources>
+    <EnableDefaultEmbeddedResourceItems>false</EnableDefaultEmbeddedResourceItems>
   </PropertyGroup>
 
   <ItemGroup>
@@ -22,5 +21,9 @@
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
+    <PackageReference Include="LibGit2Sharp" Version="0.29.0" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Resources\Strings.resx" />
   </ItemGroup>
 </Project>

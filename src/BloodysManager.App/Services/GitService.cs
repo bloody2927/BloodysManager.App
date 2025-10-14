@@ -1,167 +1,61 @@
 using System;
-using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using LibGit2Sharp;
 
 namespace BloodysManager.App.Services;
 
 public sealed class GitService
 {
-    private readonly Config _cfg;
-
-    public GitService(Config cfg)
+    public async Task CloneAsync(string repoUrl, string targetDir, Action<string> log, CancellationToken ct = default)
     {
-        _cfg = cfg;
-    }
-
-    private static async Task<(int code, string stdout, string stderr)> RunGitAsync(string args, string? workDir, CancellationToken ct)
-    {
-        using var process = new Process
+        await Task.Run(() =>
         {
-            StartInfo = new ProcessStartInfo("git", args)
+            log($"[Git] Clone → {targetDir}");
+            if (Directory.Exists(targetDir) && Directory.EnumerateFileSystemEntries(targetDir).Any())
+                throw new InvalidOperationException("Target directory is not empty.");
+
+            var options = new CloneOptions
             {
-                WorkingDirectory = workDir ?? Environment.CurrentDirectory,
-                UseShellExecute = false,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                CreateNoWindow = true
-            }
-        };
-
-        process.Start();
-
-        var stdoutTask = process.StandardOutput.ReadToEndAsync();
-        var stderrTask = process.StandardError.ReadToEndAsync();
-
-        await process.WaitForExitAsync(ct).ConfigureAwait(false);
-        var stdout = await stdoutTask.ConfigureAwait(false);
-        var stderr = await stderrTask.ConfigureAwait(false);
-
-        return (process.ExitCode, stdout, stderr);
-    }
-
-    private async Task<string> CloneFreshAsync(string repoUrl, string? branchOrRef, string destination, CancellationToken ct)
-    {
-        var temp = Path.Combine(Path.GetTempPath(), "bm_clone_" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(temp);
-
-        try
-        {
-            var args = $"clone -c gc.auto=0 --depth 1 {Escape(repoUrl)} {Escape(temp)}";
-            var (code, stdout, stderr) = await RunGitAsync(args, null, ct).ConfigureAwait(false);
-            if (code != 0)
-            {
-                throw new InvalidOperationException($"git clone failed: {stderr}\n{stdout}");
-            }
-
-            if (!string.IsNullOrWhiteSpace(branchOrRef))
-            {
-                var checkoutArgs = $"-C {Escape(temp)} checkout {Escape(branchOrRef!)}";
-                var (checkoutCode, checkoutStdout, checkoutStderr) = await RunGitAsync(checkoutArgs, null, ct).ConfigureAwait(false);
-                if (checkoutCode != 0)
+                Checkout = true,
+                OnTransferProgress = progress =>
                 {
-                    throw new InvalidOperationException($"git checkout failed: {checkoutStderr}\n{checkoutStdout}");
+                    log($"[Git] receiving {progress.ReceivedObjects}/{progress.TotalObjects} objects, deltas {progress.ReceivedDeltas}");
+                    return !ct.IsCancellationRequested;
+                },
+                OnCheckoutProgress = (path, completed, total) => log($"[Git] checkout {completed}/{total} : {path}")
+            };
+
+            Repository.Clone(repoUrl, targetDir, options);
+            log("[Git] Clone completed.");
+        }, ct).ConfigureAwait(false);
+    }
+
+    public async Task PullAsync(string repoDir, Action<string> log, CancellationToken ct = default)
+    {
+        await Task.Run(() =>
+        {
+            using var repo = new Repository(repoDir);
+            log("[Git] Fetch origin");
+            var remote = repo.Network.Remotes["origin"];
+            var fetchOptions = new FetchOptions
+            {
+                OnTransferProgress = progress =>
+                {
+                    log($"[Git] fetch {progress.ReceivedObjects}/{progress.TotalObjects}");
+                    return !ct.IsCancellationRequested;
                 }
-            }
+            };
 
-            FileUtil.AtomicSwapDirectory(temp, destination);
-            return await GetHeadCommitAsync(destination, ct).ConfigureAwait(false);
-        }
-        catch
-        {
-            FileUtil.ForceDeleteDirectory(temp);
-            throw;
-        }
-    }
+            Commands.Fetch(repo, remote.Name, remote.FetchRefSpecs.Select(spec => spec.Specification), fetchOptions, "[Git] fetch");
 
-    private static async Task<string> GetHeadCommitAsync(string repoDir, CancellationToken ct)
-    {
-        var (code, stdout, stderr) = await RunGitAsync($"-C {Escape(repoDir)} rev-parse HEAD", null, ct).ConfigureAwait(false);
-        if (code != 0)
-        {
-            throw new InvalidOperationException($"git rev-parse failed: {stderr}");
-        }
-
-        return stdout.Trim();
-    }
-
-    private static string Escape(string value)
-        => "\"" + value.Replace("\"", "\\\"") + "\"";
-
-    public Task<string> CleanCloneAsync(CancellationToken ct)
-    {
-        return CleanCloneAsync(ct, null, null);
-    }
-
-    public async Task<string> CleanCloneToDownloadAsync(CancellationToken ct)
-    {
-        var repo = _cfg.RepositoryUrl?.Trim();
-        if (string.IsNullOrWhiteSpace(repo))
-            throw new InvalidOperationException("Repository URL is not configured.");
-
-        var target = _cfg.DownloadPath?.Trim();
-        if (string.IsNullOrWhiteSpace(target))
-            throw new InvalidOperationException("Download path is not configured.");
-
-        var fullTarget = Path.GetFullPath(target);
-        var baseDir = Path.GetDirectoryName(fullTarget);
-        if (!string.IsNullOrEmpty(baseDir))
-        {
-            FileUtil.EnsureDirectory(baseDir, hardenedForCurrentUser: true);
-        }
-
-        var head = await CloneFreshAsync(repo, null, fullTarget, ct).ConfigureAwait(false);
-        return head;
-    }
-
-    public async Task<string> CleanCloneAsync(CancellationToken ct, string? destination, string? repositoryUrl)
-    {
-        var repo = string.IsNullOrWhiteSpace(repositoryUrl) ? _cfg.RepositoryUrl : repositoryUrl;
-        if (string.IsNullOrWhiteSpace(repo))
-        {
-            throw new InvalidOperationException("Repository URL is not configured.");
-        }
-
-        var target = string.IsNullOrWhiteSpace(destination) ? _cfg.LivePath : destination;
-        if (string.IsNullOrWhiteSpace(target))
-        {
-            throw new InvalidOperationException("Destination path is not configured.");
-        }
-
-        PrepareTargetDirectory(target!);
-        return await CloneFreshAsync(repo!, _cfg.RepositoryRef, target!, ct).ConfigureAwait(false);
-    }
-
-    public Task<string> UpdateAsync(CancellationToken ct)
-    {
-        return UpdateAsync(ct, null, null);
-    }
-
-    public async Task<string> UpdateAsync(CancellationToken ct, string? destination, string? repositoryUrl)
-    {
-        var repo = string.IsNullOrWhiteSpace(repositoryUrl) ? _cfg.RepositoryUrl : repositoryUrl;
-        if (string.IsNullOrWhiteSpace(repo))
-        {
-            throw new InvalidOperationException("Repository URL is not configured.");
-        }
-
-        var target = string.IsNullOrWhiteSpace(destination) ? _cfg.LivePath : destination;
-        if (string.IsNullOrWhiteSpace(target))
-        {
-            throw new InvalidOperationException("Destination path is not configured.");
-        }
-
-        PrepareTargetDirectory(target!);
-        return await CloneFreshAsync(repo!, _cfg.RepositoryRef, target!, ct).ConfigureAwait(false);
-    }
-
-    private static void PrepareTargetDirectory(string destination)
-    {
-        var parent = Path.GetDirectoryName(destination);
-        if (!string.IsNullOrEmpty(parent))
-        {
-            FileUtil.EnsureDirectory(parent, hardenedForCurrentUser: true);
-        }
+            var headName = repo.Head.FriendlyName;
+            log($"[Git] Merge origin/{headName} → {headName}");
+            var signature = repo.Config.BuildSignature(DateTimeOffset.Now);
+            var mergeResult = repo.Merge(repo.Branches[$"origin/{headName}"], signature, new MergeOptions());
+            log($"[Git] Merge result: {mergeResult.Status}");
+        }, ct).ConfigureAwait(false);
     }
 }
