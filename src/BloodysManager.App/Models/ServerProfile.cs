@@ -1,81 +1,55 @@
 using System.ComponentModel;
-using System.IO;
 using System.Runtime.CompilerServices;
 
 namespace BloodysManager.App.Models;
 
+/// <summary>
+/// Repräsentiert einen konfigurierten Server mit allen relevanten Pfaden.
+/// </summary>
 public class ServerProfile : INotifyPropertyChanged
 {
-    public event PropertyChangedEventHandler? PropertyChanged;
-    void Raise([CallerMemberName] string? name = null) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
-
     private string _name = "Server 1";
-    private string _livePath = string.Empty;
-    private string _copyPath = string.Empty;
-    private string _backupPath = string.Empty;
-    private string _backupZipPath = string.Empty;
+    private string _pathLive = "";
+    private string _pathCopy = "";
+    private string _pathBackup = "";
+    private string _pathBackupZip = "";
 
     public string Name
     {
         get => _name;
-        set
-        {
-            if (_name == value) return;
-            _name = value;
-            Raise();
-        }
+        set { if (_name != value) { _name = value; OnPropertyChanged(); } }
     }
 
-    public string LivePath
+    /// <summary>Pfad zum Live-Server.</summary>
+    public string PathLive
     {
-        get => _livePath;
-        set
-        {
-            if (_livePath == value) return;
-            _livePath = value;
-            Raise();
-            Raise(nameof(ExistsLive));
-        }
+        get => _pathLive;
+        set { if (_pathLive != value) { _pathLive = value; OnPropertyChanged(); } }
     }
 
-    public string CopyPath
+    /// <summary>Pfad zur Live-Kopie.</summary>
+    public string PathCopy
     {
-        get => _copyPath;
-        set
-        {
-            if (_copyPath == value) return;
-            _copyPath = value;
-            Raise();
-            Raise(nameof(ExistsCopy));
-        }
+        get => _pathCopy;
+        set { if (_pathCopy != value) { _pathCopy = value; OnPropertyChanged(); } }
     }
 
-    public string BackupPath
+    /// <summary>Pfad zum Backup-Ordner.</summary>
+    public string PathBackup
     {
-        get => _backupPath;
-        set
-        {
-            if (_backupPath == value) return;
-            _backupPath = value;
-            Raise();
-            Raise(nameof(ExistsBackup));
-        }
+        get => _pathBackup;
+        set { if (_pathBackup != value) { _pathBackup = value; OnPropertyChanged(); } }
     }
 
-    public string BackupZipPath
+    /// <summary>Pfad zum Backup-Zip-Ordner.</summary>
+    public string PathBackupZip
     {
-        get => _backupZipPath;
-        set
-        {
-            if (_backupZipPath == value) return;
-            _backupZipPath = value;
-            Raise();
-            Raise(nameof(ExistsBackupZip));
-        }
+        get => _pathBackupZip;
+        set { if (_pathBackupZip != value) { _pathBackupZip = value; OnPropertyChanged(); } }
     }
 
-    public bool ExistsLive => !string.IsNullOrWhiteSpace(LivePath) && Directory.Exists(LivePath);
-    public bool ExistsCopy => !string.IsNullOrWhiteSpace(CopyPath) && Directory.Exists(CopyPath);
-    public bool ExistsBackup => !string.IsNullOrWhiteSpace(BackupPath) && Directory.Exists(BackupPath);
-    public bool ExistsBackupZip => !string.IsNullOrWhiteSpace(BackupZipPath) && Directory.Exists(BackupZipPath);
+    public event PropertyChangedEventHandler? PropertyChanged;
+    protected void OnPropertyChanged([CallerMemberName] string? name = null)
+        => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
 }
+

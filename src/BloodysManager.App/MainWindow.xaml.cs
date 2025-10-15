@@ -27,10 +27,10 @@ public partial class MainWindow : Window
     private void DeleteProfile_Click(object sender, RoutedEventArgs e) => _viewModel.DeleteProfile();
     private void RenameProfile_Click(object sender, RoutedEventArgs e) => _viewModel.RenameProfile();
 
-    private void BrowseLive_Click(object sender, RoutedEventArgs e) => _viewModel.Browse(p => p.LivePath, (p, value) => p.LivePath = value);
-    private void BrowseCopy_Click(object sender, RoutedEventArgs e) => _viewModel.Browse(p => p.CopyPath, (p, value) => p.CopyPath = value);
-    private void BrowseBackup_Click(object sender, RoutedEventArgs e) => _viewModel.Browse(p => p.BackupPath, (p, value) => p.BackupPath = value);
-    private void BrowseBackupZip_Click(object sender, RoutedEventArgs e) => _viewModel.Browse(p => p.BackupZipPath, (p, value) => p.BackupZipPath = value);
+    private void BrowseLive_Click(object sender, RoutedEventArgs e) => _viewModel.Browse(p => p.PathLive, (p, value) => p.PathLive = value);
+    private void BrowseCopy_Click(object sender, RoutedEventArgs e) => _viewModel.Browse(p => p.PathCopy, (p, value) => p.PathCopy = value);
+    private void BrowseBackup_Click(object sender, RoutedEventArgs e) => _viewModel.Browse(p => p.PathBackup, (p, value) => p.PathBackup = value);
+    private void BrowseBackupZip_Click(object sender, RoutedEventArgs e) => _viewModel.Browse(p => p.PathBackupZip, (p, value) => p.PathBackupZip = value);
 
     private void CreateStructure_Click(object sender, RoutedEventArgs e) => _viewModel.CreateStructure();
     private async void Download_Click(object sender, RoutedEventArgs e) => await _viewModel.DownloadAsync();

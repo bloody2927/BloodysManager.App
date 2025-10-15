@@ -1,61 +1,61 @@
-using System;
+using LibGit2Sharp;
 using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using LibGit2Sharp;
 
 namespace BloodysManager.App.Services;
 
 public sealed class GitService
 {
-    public async Task CloneAsync(string repoUrl, string targetDir, Action<string> log, CancellationToken ct = default)
+    public async Task<bool> CleanCloneToAsync(
+        string repoUrl,
+        string targetDir,
+        IProgress<string>? log,
+        CancellationToken ct)
     {
-        await Task.Run(() =>
+        return await Task.Run(() =>
         {
-            log($"[Git] Clone → {targetDir}");
-            if (Directory.Exists(targetDir) && Directory.EnumerateFileSystemEntries(targetDir).Any())
-                throw new InvalidOperationException("Target directory is not empty.");
-
-            var options = new CloneOptions
+            try
             {
-                Checkout = true,
-                OnTransferProgress = progress =>
+                if (Directory.Exists(targetDir))
                 {
-                    log($"[Git] receiving {progress.ReceivedObjects}/{progress.TotalObjects} objects, deltas {progress.ReceivedDeltas}");
-                    return !ct.IsCancellationRequested;
-                },
-                OnCheckoutProgress = (path, completed, total) => log($"[Git] checkout {completed}/{total} : {path}")
-            };
-
-            Repository.Clone(repoUrl, targetDir, options);
-            log("[Git] Clone completed.");
-        }, ct).ConfigureAwait(false);
-    }
-
-    public async Task PullAsync(string repoDir, Action<string> log, CancellationToken ct = default)
-    {
-        await Task.Run(() =>
-        {
-            using var repo = new Repository(repoDir);
-            log("[Git] Fetch origin");
-            var remote = repo.Network.Remotes["origin"];
-            var fetchOptions = new FetchOptions
-            {
-                OnTransferProgress = progress =>
-                {
-                    log($"[Git] fetch {progress.ReceivedObjects}/{progress.TotalObjects}");
-                    return !ct.IsCancellationRequested;
+                    // Inhalt löschen, Ordner behalten
+                    foreach (var file in Directory.EnumerateFiles(targetDir, "*", SearchOption.AllDirectories))
+                        File.SetAttributes(file, FileAttributes.Normal);
+                    foreach (var dir in Directory.EnumerateDirectories(targetDir))
+                        Directory.Delete(dir, true);
+                    foreach (var file in Directory.EnumerateFiles(targetDir))
+                        File.Delete(file);
                 }
-            };
+                else
+                {
+                    Directory.CreateDirectory(targetDir);
+                }
 
-            Commands.Fetch(repo, remote.Name, remote.FetchRefSpecs.Select(spec => spec.Specification), fetchOptions, "[Git] fetch");
+                // WICHTIG: Progress gehört in FetchOptions, nicht direkt in CloneOptions
+                var opts = new CloneOptions
+                {
+                    FetchOptions = new FetchOptions
+                    {
+                        OnTransferProgress = progress =>
+                        {
+                            log?.Report($"[git] objects {progress.ReceivedObjects}/{progress.TotalObjects}, bytes {progress.ReceivedBytes}");
+                            return !ct.IsCancellationRequested;
+                        }
+                    }
+                };
 
-            var headName = repo.Head.FriendlyName;
-            log($"[Git] Merge origin/{headName} → {headName}");
-            var signature = repo.Config.BuildSignature(DateTimeOffset.Now);
-            var mergeResult = repo.Merge(repo.Branches[$"origin/{headName}"], signature, new MergeOptions());
-            log($"[Git] Merge result: {mergeResult.Status}");
-        }, ct).ConfigureAwait(false);
+                log?.Report($"[git] cloning {repoUrl} → {targetDir} ...");
+                Repository.Clone(repoUrl, targetDir, opts);
+                log?.Report("[git] clone completed ✓");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                log?.Report($"[git] clone failed ✗  {ex.Message}");
+                return false;
+            }
+        }, ct);
     }
 }

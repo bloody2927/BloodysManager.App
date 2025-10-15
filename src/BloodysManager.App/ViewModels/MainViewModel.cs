@@ -49,6 +49,15 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 
     public ObservableCollection<ServerProfile> Profiles => Config.Profiles;
 
+    private void RaiseSelectedProfileChanged()
+    {
+        Raise(nameof(SelectedProfile));
+        Raise(nameof(SelectedProfileExistsLive));
+        Raise(nameof(SelectedProfileExistsCopy));
+        Raise(nameof(SelectedProfileExistsBackup));
+        Raise(nameof(SelectedProfileExistsBackupZip));
+    }
+
     private int _selectedIndex;
     public int SelectedIndex
     {
@@ -60,7 +69,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             _selectedIndex = normalized;
             Config.SelectedProfileIndex = normalized;
             Raise();
-            Raise(nameof(SelectedProfile));
+            RaiseSelectedProfileChanged();
             _configService.Save(Config);
         }
     }
@@ -78,10 +87,23 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
                 profile.PropertyChanged += OnProfileChanged;
                 Profiles.Add(profile);
                 _selectedIndex = 0;
+                RaiseSelectedProfileChanged();
             }
             return Profiles[ClampIndex(_selectedIndex)];
         }
     }
+
+    public bool SelectedProfileExistsLive
+        => Directory.Exists(SelectedProfile.PathLive);
+
+    public bool SelectedProfileExistsCopy
+        => Directory.Exists(SelectedProfile.PathCopy);
+
+    public bool SelectedProfileExistsBackup
+        => Directory.Exists(SelectedProfile.PathBackup);
+
+    public bool SelectedProfileExistsBackupZip
+        => Directory.Exists(SelectedProfile.PathBackupZip);
 
     public MainViewModel()
     {
@@ -109,7 +131,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         {
             _configService.Save(Config);
             if (profile == SelectedProfile)
-                Raise(nameof(SelectedProfile));
+                RaiseSelectedProfileChanged();
         }
     }
 
@@ -226,10 +248,10 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         _fileService.EnsureDir(backup);
         _fileService.EnsureDir(backupZip);
 
-        profile.LivePath = live;
-        profile.CopyPath = copy;
-        profile.BackupPath = backup;
-        profile.BackupZipPath = backupZip;
+        profile.PathLive = live;
+        profile.PathCopy = copy;
+        profile.PathBackup = backup;
+        profile.PathBackupZip = backupZip;
         _configService.Save(Config);
         Append($"Structure created under: {root}");
     }
@@ -286,7 +308,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     {
         try
         {
-            _fileService.CopyDirectoryContents(SelectedProfile.LivePath, SelectedProfile.CopyPath, Append);
+            _fileService.CopyDirectoryContents(SelectedProfile.PathLive, SelectedProfile.PathCopy, Append);
             await Task.CompletedTask;
         }
         catch (Exception ex)
@@ -299,7 +321,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     {
         try
         {
-            _fileService.DeleteDirectoryContents(SelectedProfile.LivePath, Append);
+            _fileService.DeleteDirectoryContents(SelectedProfile.PathLive, Append);
         }
         catch (Exception ex)
         {
@@ -311,7 +333,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     {
         try
         {
-            _fileService.DeleteDirectoryContents(SelectedProfile.CopyPath, Append);
+            _fileService.DeleteDirectoryContents(SelectedProfile.PathCopy, Append);
         }
         catch (Exception ex)
         {
@@ -323,7 +345,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     {
         try
         {
-            _fileService.SnapshotToBackup(SelectedProfile.LivePath, SelectedProfile.BackupPath, Append);
+            _fileService.SnapshotToBackup(SelectedProfile.PathLive, SelectedProfile.PathBackup, Append);
         }
         catch (Exception ex)
         {
@@ -335,7 +357,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     {
         try
         {
-            _fileService.RotateBackups(SelectedProfile.BackupPath, 5, Append);
+            _fileService.RotateBackups(SelectedProfile.PathBackup, 5, Append);
         }
         catch (Exception ex)
         {
