@@ -63,7 +63,9 @@ public sealed class GitService
 
             options.FetchOptions.OnTransferProgress = stats =>
             {
-                log?.Report($"[git] objects {stats.ReceivedObjects}/{stats.TotalObjects}  deltas {stats.ReceivedDeltas}");
+                // 'ReceivedDeltas' existiert in dieser LibGit2Sharp-Version nicht.
+                // Stattdessen 'IndexedObjects' (fortschreitende Indexierung) loggen.
+                log?.Report($"[git] objects {stats.ReceivedObjects}/{stats.TotalObjects}  indexed {stats.IndexedObjects}");
                 return !ct.IsCancellationRequested;
             };
 
