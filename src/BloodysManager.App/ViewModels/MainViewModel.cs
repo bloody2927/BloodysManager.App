@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.IO;
@@ -9,6 +10,7 @@ using System.Threading.Tasks;
 using System.Windows.Forms;
 using BloodysManager.App.Models;
 using BloodysManager.App.Services;
+using Microsoft.Win32;
 
 namespace BloodysManager.App.ViewModels;
 
@@ -21,8 +23,10 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     private readonly ConfigService _configService;
     private readonly GitService _gitService;
     private readonly FileOpsService _fileService;
-    private readonly PerfService _perfService;
-    private readonly CancellationTokenSource _perfLoopCts = new();
+    private readonly ProcessService _processService = new();
+    private readonly Timer _perfTimer;
+    private ProcessPerfSampler? _worldSampler;
+    private ProcessPerfSampler? _authSampler;
 
     public AppConfig Config { get; }
     public ObservableCollection<string> Log { get; } = new();
@@ -105,13 +109,70 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     public bool SelectedProfileExistsBackupZip
         => Directory.Exists(SelectedProfile.PathBackupZip);
 
+    private double _worldCpu;
+    public double WorldCpu
+    {
+        get => _worldCpu;
+        private set => SetField(ref _worldCpu, value);
+    }
+
+    private double _worldRam;
+    public double WorldRam
+    {
+        get => _worldRam;
+        private set => SetField(ref _worldRam, value);
+    }
+
+    private double _authCpu;
+    public double AuthCpu
+    {
+        get => _authCpu;
+        private set => SetField(ref _authCpu, value);
+    }
+
+    private double _authRam;
+    public double AuthRam
+    {
+        get => _authRam;
+        private set => SetField(ref _authRam, value);
+    }
+
+    public string WorldExePath
+    {
+        get => Config.WorldExePath;
+        set
+        {
+            if (Config.WorldExePath == value)
+                return;
+
+            Config.WorldExePath = value ?? string.Empty;
+            Raise();
+            _configService.Save(Config);
+            ResetWorldSampler();
+        }
+    }
+
+    public string AuthExePath
+    {
+        get => Config.AuthExePath;
+        set
+        {
+            if (Config.AuthExePath == value)
+                return;
+
+            Config.AuthExePath = value ?? string.Empty;
+            Raise();
+            _configService.Save(Config);
+            ResetAuthSampler();
+        }
+    }
+
     public MainViewModel()
     {
         _syncContext = SynchronizationContext.Current ?? new SynchronizationContext();
         _configService = new ConfigService();
         _gitService = new GitService();
         _fileService = new FileOpsService();
-        _perfService = new PerfService();
 
         Config = _configService.Load();
         foreach (var profile in Profiles)
@@ -119,7 +180,10 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 
         _selectedIndex = ClampIndex(Config.SelectedProfileIndex);
         Append("Config loaded.");
-        _ = StartPerfLoopAsync(_perfLoopCts.Token);
+
+        ResetWorldSampler();
+        ResetAuthSampler();
+        _perfTimer = new Timer(UpdatePerf, null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
     }
 
     private void OnProfileChanged(object? sender, PropertyChangedEventArgs e)
@@ -135,24 +199,28 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         }
     }
 
-    private async Task StartPerfLoopAsync(CancellationToken token)
+    private void UpdatePerf(object? state)
     {
-        try
+        var worldCpu = _worldSampler?.CpuPercent ?? 0.0;
+        var worldRam = _worldSampler?.RamMb ?? 0.0;
+        var authCpu = _authSampler?.CpuPercent ?? 0.0;
+        var authRam = _authSampler?.RamMb ?? 0.0;
+
+        void Apply()
         {
-            while (!token.IsCancellationRequested)
-            {
-                var (cpu, ram) = _perfService.Sample();
-                Append($"CPU {cpu:F1}% | RAM {ram:F1}%");
-                await Task.Delay(TimeSpan.FromSeconds(30), token);
-            }
+            WorldCpu = worldCpu;
+            WorldRam = worldRam;
+            AuthCpu = authCpu;
+            AuthRam = authRam;
         }
-        catch (TaskCanceledException)
+
+        if (SynchronizationContext.Current == _syncContext)
         {
-            // ignore
+            Apply();
         }
-        catch (Exception ex)
+        else
         {
-            Append($"Perf error: {ex.Message}");
+            _syncContext.Post(_ => Apply(), null);
         }
     }
 
@@ -222,6 +290,94 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             _configService.Save(Config);
             Append($"Path updated: {dialog.SelectedPath}");
         }
+    }
+
+    public void BrowseWorldExe()
+    {
+        var dialog = new OpenFileDialog
+        {
+            Filter = "Executables (*.exe)|*.exe|All files (*.*)|*.*",
+            FileName = string.IsNullOrWhiteSpace(WorldExePath) ? string.Empty : WorldExePath
+        };
+
+        if (dialog.ShowDialog() == true)
+        {
+            WorldExePath = dialog.FileName;
+            Append($"World executable set: {dialog.FileName}");
+        }
+    }
+
+    public void BrowseAuthExe()
+    {
+        var dialog = new OpenFileDialog
+        {
+            Filter = "Executables (*.exe)|*.exe|All files (*.*)|*.*",
+            FileName = string.IsNullOrWhiteSpace(AuthExePath) ? string.Empty : AuthExePath
+        };
+
+        if (dialog.ShowDialog() == true)
+        {
+            AuthExePath = dialog.FileName;
+            Append($"Auth executable set: {dialog.FileName}");
+        }
+    }
+
+    public void StartWorld()
+        => ExecuteProcessAction(() => _processService.StartExe(WorldExePath, Append));
+
+    public void StopWorld()
+        => ExecuteProcessAction(() => _processService.StopByPath(WorldExePath, Append));
+
+    public void RestartWorld()
+        => ExecuteProcessAction(() => _processService.Restart(WorldExePath, Append));
+
+    public void StartAuth()
+        => ExecuteProcessAction(() => _processService.StartExe(AuthExePath, Append));
+
+    public void StopAuth()
+        => ExecuteProcessAction(() => _processService.StopByPath(AuthExePath, Append));
+
+    public void RestartAuth()
+        => ExecuteProcessAction(() => _processService.Restart(AuthExePath, Append));
+
+    private void ExecuteProcessAction(Action action)
+    {
+        try
+        {
+            action();
+        }
+        catch (Exception ex)
+        {
+            Append($"X {ex.Message}");
+        }
+    }
+
+    private void ResetWorldSampler()
+    {
+        _worldSampler?.Dispose();
+        _worldSampler = null;
+
+        if (!string.IsNullOrWhiteSpace(WorldExePath) && File.Exists(WorldExePath))
+        {
+            _worldSampler = new ProcessPerfSampler(WorldExePath, TimeSpan.FromSeconds(5));
+            _worldSampler.Start();
+        }
+
+        UpdatePerf(null);
+    }
+
+    private void ResetAuthSampler()
+    {
+        _authSampler?.Dispose();
+        _authSampler = null;
+
+        if (!string.IsNullOrWhiteSpace(AuthExePath) && File.Exists(AuthExePath))
+        {
+            _authSampler = new ProcessPerfSampler(AuthExePath, TimeSpan.FromSeconds(5));
+            _authSampler.Start();
+        }
+
+        UpdatePerf(null);
     }
 
     public void CreateStructure()
@@ -367,11 +523,21 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 
     public void Dispose()
     {
-        _perfLoopCts.Cancel();
-        _perfService.Dispose();
-        _perfLoopCts.Dispose();
+        _perfTimer.Dispose();
+        _worldSampler?.Dispose();
+        _authSampler?.Dispose();
         foreach (var profile in Profiles)
             profile.PropertyChanged -= OnProfileChanged;
+    }
+
+    private bool SetField<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)
+    {
+        if (EqualityComparer<T>.Default.Equals(field, value))
+            return false;
+
+        field = value;
+        Raise(propertyName);
+        return true;
     }
 }
 

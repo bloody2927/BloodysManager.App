@@ -1,65 +1,64 @@
 using System;
 using System.Diagnostics;
 using System.IO;
-using System.Threading;
-using System.Threading.Tasks;
 
 namespace BloodysManager.App.Services;
 
 public sealed class ProcessService
 {
-    public async Task<(int exitCode, Exception? error)> RunAsync(
-        string exePath,
-        string? args,
-        string? workingDir,
-        Action<string>? onOut,
-        Action<string>? onErr,
-        CancellationToken ct)
+    public Process? StartExe(string exePath, Action<string>? log = null)
     {
-        try
+        if (string.IsNullOrWhiteSpace(exePath) || !File.Exists(exePath))
+            throw new FileNotFoundException("Executable not found", exePath);
+
+        var startInfo = new ProcessStartInfo(exePath)
         {
-            var psi = new ProcessStartInfo
-            {
-                FileName = exePath,
-                Arguments = args ?? string.Empty,
-                WorkingDirectory = string.IsNullOrWhiteSpace(workingDir) ? Path.GetDirectoryName(exePath)! : workingDir,
-                UseShellExecute = false,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                CreateNoWindow = true
-            };
+            WorkingDirectory = Path.GetDirectoryName(exePath)!,
+            UseShellExecute = false,
+            CreateNoWindow = false
+        };
 
-            using var proc = new Process { StartInfo = psi, EnableRaisingEvents = true };
-            var tcs = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var process = Process.Start(startInfo);
+        log?.Invoke($"[proc] started: {exePath} (pid {process?.Id})");
+        return process;
+    }
 
-            proc.OutputDataReceived += (_, e) => { if (e.Data != null) onOut?.Invoke(e.Data); };
-            proc.ErrorDataReceived += (_, e) => { if (e.Data != null) onErr?.Invoke(e.Data); };
-            proc.Exited += (_, __) => tcs.TrySetResult(proc.ExitCode);
+    public bool StopByPath(string exePath, Action<string>? log = null)
+    {
+        var name = Path.GetFileNameWithoutExtension(exePath);
+        if (string.IsNullOrWhiteSpace(name))
+            return false;
 
-            if (!proc.Start())
-                return (-1, new InvalidOperationException("Process could not start."));
-
-            proc.BeginOutputReadLine();
-            proc.BeginErrorReadLine();
-
-            using var reg = ct.Register(() =>
-            {
-                try
-                {
-                    if (!proc.HasExited)
-                        proc.Kill(entireProcessTree: true);
-                }
-                catch
-                {
-                }
-            });
-
-            var exit = await tcs.Task.ConfigureAwait(false);
-            return (exit, null);
-        }
-        catch (Exception ex)
+        var any = false;
+        foreach (var process in Process.GetProcessesByName(name))
         {
-            return (-1, ex);
+            try
+            {
+                process.Kill(entireProcessTree: true);
+                process.WaitForExit(5000);
+                any = true;
+            }
+            catch
+            {
+                // ignore
+            }
         }
+
+        if (any)
+            log?.Invoke($"[proc] stopped: {name}");
+
+        return any;
+    }
+
+    public Process? Restart(string exePath, Action<string>? log = null)
+    {
+        StopByPath(exePath, log);
+        return StartExe(exePath, log);
+    }
+
+    public static bool IsRunning(string exePath)
+    {
+        var name = Path.GetFileNameWithoutExtension(exePath);
+        return !string.IsNullOrWhiteSpace(name) && Process.GetProcessesByName(name).Length > 0;
     }
 }

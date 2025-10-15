@@ -112,7 +112,8 @@
                     <TextBox Grid.Row="0"
                              Grid.Column="2"
                              Text="{Binding SelectedProfile.PathLive}"
-                             Margin="8,2" />
+                             Margin="8,2"
+                             MinWidth="420" />
                     <Button Grid.Row="0"
                             Grid.Column="3"
                             Content="..."
@@ -133,7 +134,8 @@
                     <TextBox Grid.Row="1"
                              Grid.Column="2"
                              Text="{Binding SelectedProfile.PathCopy}"
-                             Margin="8,2" />
+                             Margin="8,2"
+                             MinWidth="420" />
                     <Button Grid.Row="1"
                             Grid.Column="3"
                             Content="..."
@@ -154,7 +156,8 @@
                     <TextBox Grid.Row="2"
                              Grid.Column="2"
                              Text="{Binding SelectedProfile.PathBackup}"
-                             Margin="8,2" />
+                             Margin="8,2"
+                             MinWidth="420" />
                     <Button Grid.Row="2"
                             Grid.Column="3"
                             Content="..."
@@ -175,7 +178,8 @@
                     <TextBox Grid.Row="3"
                              Grid.Column="2"
                              Text="{Binding SelectedProfile.PathBackupZip}"
-                             Margin="8,2" />
+                             Margin="8,2"
+                             MinWidth="420" />
                     <Button Grid.Row="3"
                             Grid.Column="3"
                             Content="..."
@@ -204,19 +208,106 @@
             </WrapPanel>
 
             <GroupBox Grid.Row="1" Header="Log">
-                <ScrollViewer VerticalScrollBarVisibility="Auto">
-                    <TextBlock Text="{Binding LogText}"
-                               FontFamily="Consolas"
-                               TextWrapping="Wrap"
-                               Margin="6" />
-                </ScrollViewer>
+                <TextBox Text="{Binding LogText}"
+                         Margin="8"
+                         FontFamily="Consolas"
+                         FontSize="12"
+                         AcceptsReturn="True"
+                         IsReadOnly="True"
+                         VerticalScrollBarVisibility="Auto" />
             </GroupBox>
         </Grid>
 
-        <!-- Performance info -->
-        <TextBlock Grid.Row="3"
-                   Text="Performance samples (CPU/RAM) are logged every 30 seconds."
-                   HorizontalAlignment="Center"
-                   Margin="0,6" />
+        <!-- Server controls and performance -->
+        <Grid Grid.Row="3" Margin="12">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="2*" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <StackPanel Grid.Column="0">
+                <TextBlock Text="Server Controls"
+                           FontWeight="Bold"
+                           Margin="0,0,0,8" />
+
+                <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                    <TextBlock Text="worldserver.exe"
+                               VerticalAlignment="Center"
+                               Margin="0,0,8,0" />
+                    <TextBox Width="420"
+                             Text="{Binding WorldExePath, UpdateSourceTrigger=PropertyChanged}" />
+                    <Button Content="..."
+                            Width="36"
+                            Click="BrowseWorldExe_Click" />
+                    <Button Content="Start"
+                            Click="StartWorld_Click" />
+                    <Button Content="Restart"
+                            Click="RestartWorld_Click" />
+                    <Button Content="Stop"
+                            Click="StopWorld_Click" />
+                </StackPanel>
+
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="authserver.exe"
+                               VerticalAlignment="Center"
+                               Margin="0,0,8,0" />
+                    <TextBox Width="420"
+                             Text="{Binding AuthExePath, UpdateSourceTrigger=PropertyChanged}" />
+                    <Button Content="..."
+                            Width="36"
+                            Click="BrowseAuthExe_Click" />
+                    <Button Content="Start"
+                            Click="StartAuth_Click" />
+                    <Button Content="Restart"
+                            Click="RestartAuth_Click" />
+                    <Button Content="Stop"
+                            Click="StopAuth_Click" />
+                </StackPanel>
+            </StackPanel>
+
+            <Border Grid.Column="1"
+                    BorderBrush="#DDDDDD"
+                    BorderThickness="1"
+                    CornerRadius="6"
+                    Padding="12"
+                    Margin="12,0,0,0">
+                <StackPanel>
+                    <TextBlock Text="Process Performance (live)"
+                               FontWeight="Bold" />
+
+                    <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                        <StackPanel Margin="0,0,16,0">
+                            <TextBlock Text="World CPU" />
+                            <TextBlock Text="{Binding WorldCpu, StringFormat={}{0:F1}%}"
+                                       FontFamily="Consolas" />
+                            <TextBlock Text="World RAM"
+                                       Margin="0,6,0,0" />
+                            <TextBlock Text="{Binding WorldRam, StringFormat={}{0:F0} MB}"
+                                       FontFamily="Consolas" />
+                        </StackPanel>
+                        <StackPanel>
+                            <TextBlock Text="Auth CPU" />
+                            <TextBlock Text="{Binding AuthCpu, StringFormat={}{0:F1}%}"
+                                       FontFamily="Consolas" />
+                            <TextBlock Text="Auth RAM"
+                                       Margin="0,6,0,0" />
+                            <TextBlock Text="{Binding AuthRam, StringFormat={}{0:F0} MB}"
+                                       FontFamily="Consolas" />
+                        </StackPanel>
+                    </StackPanel>
+
+                    <Border Height="120"
+                            Margin="0,12,0,0"
+                            Background="#11000000"
+                            CornerRadius="6"
+                            HorizontalAlignment="Stretch">
+                        <TextBlock Text="(chart placeholder)"
+                                   Foreground="Gray"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center" />
+                    </Border>
+                </StackPanel>
+            </Border>
+        </Grid>
     </Grid>
 </Window>
