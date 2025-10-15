@@ -7,6 +7,7 @@ using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using Microsoft.Win32;
 using BloodysManager.App.Models;
 using BloodysManager.App.Services;
 
@@ -21,8 +22,11 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     private readonly ConfigService _configService;
     private readonly GitService _gitService;
     private readonly FileOpsService _fileService;
-    private readonly PerfService _perfService;
-    private readonly CancellationTokenSource _perfLoopCts = new();
+    private readonly ProcessService _processService = new();
+    private ProcessPerfSampler? _worldSampler;
+    private ProcessPerfSampler? _authSampler;
+    private CancellationTokenSource? _monitorCts;
+    private Task? _monitorTask;
 
     public AppConfig Config { get; }
     public ObservableCollection<string> Log { get; } = new();
@@ -56,6 +60,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         Raise(nameof(SelectedProfileExistsCopy));
         Raise(nameof(SelectedProfileExistsBackup));
         Raise(nameof(SelectedProfileExistsBackupZip));
+        Raise(nameof(SelectedWorldExeExists));
+        Raise(nameof(SelectedAuthExeExists));
     }
 
     private int _selectedIndex;
@@ -70,6 +76,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             Config.SelectedProfileIndex = normalized;
             Raise();
             RaiseSelectedProfileChanged();
+            StartProcessMonitoring();
             _configService.Save(Config);
         }
     }
@@ -105,13 +112,120 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     public bool SelectedProfileExistsBackupZip
         => Directory.Exists(SelectedProfile.PathBackupZip);
 
+    public bool SelectedWorldExeExists
+    {
+        get
+        {
+            var path = GetWorldExePath();
+            return !string.IsNullOrWhiteSpace(path) && File.Exists(path);
+        }
+    }
+
+    public bool SelectedAuthExeExists
+    {
+        get
+        {
+            var path = GetAuthExePath();
+            return !string.IsNullOrWhiteSpace(path) && File.Exists(path);
+        }
+    }
+
+    double _worldCpu;
+    public double WorldCpu
+    {
+        get => _worldCpu;
+        private set
+        {
+            if (Math.Abs(_worldCpu - value) > 0.01)
+            {
+                _worldCpu = value;
+                Raise();
+            }
+        }
+    }
+
+    double _worldRam;
+    public double WorldRam
+    {
+        get => _worldRam;
+        private set
+        {
+            if (Math.Abs(_worldRam - value) > 0.1)
+            {
+                _worldRam = value;
+                Raise();
+            }
+        }
+    }
+
+    double _authCpu;
+    public double AuthCpu
+    {
+        get => _authCpu;
+        private set
+        {
+            if (Math.Abs(_authCpu - value) > 0.01)
+            {
+                _authCpu = value;
+                Raise();
+            }
+        }
+    }
+
+    double _authRam;
+    public double AuthRam
+    {
+        get => _authRam;
+        private set
+        {
+            if (Math.Abs(_authRam - value) > 0.1)
+            {
+                _authRam = value;
+                Raise();
+            }
+        }
+    }
+
+    bool _worldRunning;
+    public bool WorldRunning
+    {
+        get => _worldRunning;
+        private set
+        {
+            if (_worldRunning != value)
+            {
+                _worldRunning = value;
+                Raise();
+                Raise(nameof(WorldStatus));
+            }
+        }
+    }
+
+    bool _authRunning;
+    public bool AuthRunning
+    {
+        get => _authRunning;
+        private set
+        {
+            if (_authRunning != value)
+            {
+                _authRunning = value;
+                Raise();
+                Raise(nameof(AuthStatus));
+            }
+        }
+    }
+
+    public string WorldStatus => WorldRunning ? "Running" : "Stopped";
+
+    public string AuthStatus => AuthRunning ? "Running" : "Stopped";
+
     public MainViewModel()
     {
         _syncContext = SynchronizationContext.Current ?? new SynchronizationContext();
         _configService = new ConfigService();
         _gitService = new GitService();
         _fileService = new FileOpsService();
-        _perfService = new PerfService();
 
         Config = _configService.Load();
         foreach (var profile in Profiles)
@@ -119,7 +233,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 
         _selectedIndex = ClampIndex(Config.SelectedProfileIndex);
         Append("Config loaded.");
-        _ = StartPerfLoopAsync(_perfLoopCts.Token);
+        RaiseSelectedProfileChanged();
+        StartProcessMonitoring();
     }
 
     private void OnProfileChanged(object? sender, PropertyChangedEventArgs e)
@@ -131,29 +246,120 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         {
             _configService.Save(Config);
             if (profile == SelectedProfile)
+            {
                 RaiseSelectedProfileChanged();
+                if (string.IsNullOrEmpty(e.PropertyName)
+                    || e.PropertyName == nameof(ServerProfile.PathLive)
+                    || e.PropertyName == nameof(ServerProfile.WorldExePath)
+                    || e.PropertyName == nameof(ServerProfile.AuthExePath))
+                {
+                    StartProcessMonitoring();
+                }
+            }
         }
     }
 
-    private async Task StartPerfLoopAsync(CancellationToken token)
+    private void StartProcessMonitoring()
+    {
+        _monitorCts?.Cancel();
+        _monitorCts = new CancellationTokenSource();
+
+        _worldSampler?.Dispose();
+        _worldSampler = null;
+        _authSampler?.Dispose();
+        _authSampler = null;
+
+        var worldPath = GetWorldExePath();
+        if (!string.IsNullOrWhiteSpace(worldPath))
+        {
+            _worldSampler = new ProcessPerfSampler(worldPath, TimeSpan.FromSeconds(5));
+            _worldSampler.Start();
+        }
+
+        var authPath = GetAuthExePath();
+        if (!string.IsNullOrWhiteSpace(authPath))
+        {
+            _authSampler = new ProcessPerfSampler(authPath, TimeSpan.FromSeconds(5));
+            _authSampler.Start();
+        }
+
+        UpdateWorldMetrics();
+        UpdateAuthMetrics();
+
+        var token = _monitorCts.Token;
+        _monitorTask = Task.Run(() => MonitorLoopAsync(token), token);
+    }
+
+    private async Task MonitorLoopAsync(CancellationToken token)
     {
         try
         {
             while (!token.IsCancellationRequested)
             {
-                var (cpu, ram) = _perfService.Sample();
-                Append($"CPU {cpu:F1}% | RAM {ram:F1}%");
-                await Task.Delay(TimeSpan.FromSeconds(30), token);
+                UpdateWorldMetrics();
+                UpdateAuthMetrics();
+                await Task.Delay(TimeSpan.FromSeconds(1), token);
             }
         }
         catch (TaskCanceledException)
         {
-            // ignore
+            // expected during shutdown
         }
-        catch (Exception ex)
+    }
+
+    private void UpdateWorldMetrics()
+    {
+        WorldCpu = _worldSampler?.CpuPercent ?? 0;
+        WorldRam = _worldSampler?.RamMb ?? 0;
+        var path = GetWorldExePath();
+        WorldRunning = !string.IsNullOrWhiteSpace(path) && ProcessService.IsRunning(path);
+        Raise(nameof(SelectedWorldExeExists));
+    }
+
+    private void UpdateAuthMetrics()
+    {
+        AuthCpu = _authSampler?.CpuPercent ?? 0;
+        AuthRam = _authSampler?.RamMb ?? 0;
+        var path = GetAuthExePath();
+        AuthRunning = !string.IsNullOrWhiteSpace(path) && ProcessService.IsRunning(path);
+        Raise(nameof(SelectedAuthExeExists));
+    }
+
+    private string GetWorldExePath()
+    {
+        var profile = SelectedProfile;
+        if (!string.IsNullOrWhiteSpace(profile.WorldExePath))
+            return profile.WorldExePath;
+        if (!string.IsNullOrWhiteSpace(profile.PathLive))
+            return Path.Combine(profile.PathLive, "bin", "worldserver.exe");
+        return string.Empty;
+    }
+
+    private string GetAuthExePath()
+    {
+        var profile = SelectedProfile;
+        if (!string.IsNullOrWhiteSpace(profile.AuthExePath))
+            return profile.AuthExePath;
+        if (!string.IsNullOrWhiteSpace(profile.PathLive))
+            return Path.Combine(profile.PathLive, "bin", "authserver.exe");
+        return string.Empty;
+    }
+
+    private bool EnsureExePath(string path, string label, bool requireExists)
+    {
+        if (string.IsNullOrWhiteSpace(path))
         {
-            Append($"Perf error: {ex.Message}");
+            Append($"{label} executable path is not configured.");
+            return false;
         }
+
+        if (requireExists && !File.Exists(path))
+        {
+            Append($"{label} executable not found: {path}");
+            return false;
+        }
+
+        return true;
     }
 
     public void SaveRepo()
@@ -166,6 +372,152 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     {
         _configService.Save(Config);
         Append("Download target saved.");
+    }
+
+    public void BrowseWorldExe()
+    {
+        var profile = SelectedProfile;
+        var dialog = new OpenFileDialog
+        {
+            Filter = "Executables (*.exe)|*.exe|All files (*.*)|*.*",
+            FileName = string.IsNullOrWhiteSpace(profile.WorldExePath) ? string.Empty : profile.WorldExePath
+        };
+
+        if (dialog.ShowDialog() == true && !string.IsNullOrWhiteSpace(dialog.FileName))
+        {
+            profile.WorldExePath = dialog.FileName;
+            _configService.Save(Config);
+            Append($"World executable set: {dialog.FileName}");
+            StartProcessMonitoring();
+        }
+    }
+
+    public void BrowseAuthExe()
+    {
+        var profile = SelectedProfile;
+        var dialog = new OpenFileDialog
+        {
+            Filter = "Executables (*.exe)|*.exe|All files (*.*)|*.*",
+            FileName = string.IsNullOrWhiteSpace(profile.AuthExePath) ? string.Empty : profile.AuthExePath
+        };
+
+        if (dialog.ShowDialog() == true && !string.IsNullOrWhiteSpace(dialog.FileName))
+        {
+            profile.AuthExePath = dialog.FileName;
+            _configService.Save(Config);
+            Append($"Auth executable set: {dialog.FileName}");
+            StartProcessMonitoring();
+        }
+    }
+
+    public void StartWorld()
+    {
+        var path = GetWorldExePath();
+        if (!EnsureExePath(path, "World server", requireExists: true))
+            return;
+
+        try
+        {
+            _processService.StartExe(path, Append);
+        }
+        catch (Exception ex)
+        {
+            Append($"X Failed to start world server: {ex.Message}");
+        }
+
+        StartProcessMonitoring();
+    }
+
+    public void StopWorld()
+    {
+        var path = GetWorldExePath();
+        if (!EnsureExePath(path, "World server", requireExists: false))
+            return;
+
+        try
+        {
+            if (!_processService.StopByPath(path, Append))
+                Append("World server was not running.");
+        }
+        catch (Exception ex)
+        {
+            Append($"X Failed to stop world server: {ex.Message}");
+        }
+
+        StartProcessMonitoring();
+    }
+
+    public void RestartWorld()
+    {
+        var path = GetWorldExePath();
+        if (!EnsureExePath(path, "World server", requireExists: true))
+            return;
+
+        try
+        {
+            _processService.Restart(path, Append);
+        }
+        catch (Exception ex)
+        {
+            Append($"X Failed to restart world server: {ex.Message}");
+        }
+
+        StartProcessMonitoring();
+    }
+
+    public void StartAuth()
+    {
+        var path = GetAuthExePath();
+        if (!EnsureExePath(path, "Auth server", requireExists: true))
+            return;
+
+        try
+        {
+            _processService.StartExe(path, Append);
+        }
+        catch (Exception ex)
+        {
+            Append($"X Failed to start auth server: {ex.Message}");
+        }
+
+        StartProcessMonitoring();
+    }
+
+    public void StopAuth()
+    {
+        var path = GetAuthExePath();
+        if (!EnsureExePath(path, "Auth server", requireExists: false))
+            return;
+
+        try
+        {
+            if (!_processService.StopByPath(path, Append))
+                Append("Auth server was not running.");
+        }
+        catch (Exception ex)
+        {
+            Append($"X Failed to stop auth server: {ex.Message}");
+        }
+
+        StartProcessMonitoring();
+    }
+
+    public void RestartAuth()
+    {
+        var path = GetAuthExePath();
+        if (!EnsureExePath(path, "Auth server", requireExists: true))
+            return;
+
+        try
+        {
+            _processService.Restart(path, Append);
+        }
+        catch (Exception ex)
+        {
+            Append($"X Failed to restart auth server: {ex.Message}");
+        }
+
+        StartProcessMonitoring();
     }
 
     public void NewProfile()
@@ -221,6 +573,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             setter(profile, dialog.SelectedPath);
             _configService.Save(Config);
             Append($"Path updated: {dialog.SelectedPath}");
+            StartProcessMonitoring();
         }
     }
 
@@ -254,6 +607,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         profile.PathBackupZip = backupZip;
         _configService.Save(Config);
         Append($"Structure created under: {root}");
+        StartProcessMonitoring();
     }
 
     public async Task DownloadAsync()
@@ -367,9 +721,19 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 
     public void Dispose()
     {
-        _perfLoopCts.Cancel();
-        _perfService.Dispose();
-        _perfLoopCts.Dispose();
+        _monitorCts?.Cancel();
+        try
+        {
+            _monitorTask?.Wait(TimeSpan.FromSeconds(1));
+        }
+        catch
+        {
+            // ignore
+        }
+
+        _monitorCts?.Dispose();
+        _worldSampler?.Dispose();
+        _authSampler?.Dispose();
         foreach (var profile in Profiles)
             profile.PropertyChanged -= OnProfileChanged;
     }

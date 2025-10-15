@@ -13,6 +13,8 @@ public class ServerProfile : INotifyPropertyChanged
     private string _pathCopy = "";
     private string _pathBackup = "";
     private string _pathBackupZip = "";
+    private string _worldExePath = "";
+    private string _authExePath = "";
 
     public string Name
     {
@@ -46,6 +48,18 @@ public class ServerProfile : INotifyPropertyChanged
     {
         get => _pathBackupZip;
         set { if (_pathBackupZip != value) { _pathBackupZip = value; OnPropertyChanged(); } }
+    }
+
+    public string WorldExePath
+    {
+        get => _worldExePath;
+        set { if (_worldExePath != value) { _worldExePath = value; OnPropertyChanged(); } }
+    }
+
+    public string AuthExePath
+    {
+        get => _authExePath;
+        set { if (_authExePath != value) { _authExePath = value; OnPropertyChanged(); } }
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;

@@ -28,6 +28,10 @@ public sealed class Config
     public string BackupZip { get; set; } =
         @"B:\\Server\\BackupZip";
 
+    public string WorldExePath { get; set; } = string.Empty;
+
+    public string AuthExePath { get; set; } = string.Empty;
+
     static string CfgFile(string baseDir) => Path.Combine(baseDir, "appsettings.json");
 
     public static Config Load(string baseDir)
@@ -58,6 +62,10 @@ public sealed class Config
             cfg.BackupRoot = backupRoot.GetString() ?? cfg.BackupRoot;
         if (root.TryGetProperty(nameof(BackupZip), out var backupZip))
             cfg.BackupZip = backupZip.GetString() ?? cfg.BackupZip;
+        if (root.TryGetProperty(nameof(WorldExePath), out var worldExe))
+            cfg.WorldExePath = worldExe.GetString() ?? cfg.WorldExePath;
+        if (root.TryGetProperty(nameof(AuthExePath), out var authExe))
+            cfg.AuthExePath = authExe.GetString() ?? cfg.AuthExePath;
 
         return cfg;
     }
@@ -78,6 +86,8 @@ public sealed class Config
         writer.WriteString(nameof(CopyPath), CopyPath ?? string.Empty);
         writer.WriteString(nameof(BackupRoot), BackupRoot ?? string.Empty);
         writer.WriteString(nameof(BackupZip), BackupZip ?? string.Empty);
+        writer.WriteString(nameof(WorldExePath), WorldExePath ?? string.Empty);
+        writer.WriteString(nameof(AuthExePath), AuthExePath ?? string.Empty);
         writer.WriteEndObject();
         writer.Flush();
     }
