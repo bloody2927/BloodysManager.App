@@ -1,112 +1,104 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using BloodysManager.App.Models;
+using BloodysManager.App.Models; // <- stellt ServerProfile bereit
 
 namespace BloodysManager.App.Services;
 
 public sealed class CopyService
 {
-    private readonly Config _cfg;
-
-    public CopyService(Config cfg)
+    private static void EnsureDir(string path)
     {
-        _cfg = cfg;
+        if (!Directory.Exists(path))
+            Directory.CreateDirectory(path);
     }
 
-    public Task MirrorLiveToCopyAsync(CancellationToken ct)
+    public async Task MirrorLiveToCopyAsync(ServerProfile sp, IProgress<string>? log, CancellationToken ct)
     {
-        return MirrorAsync(_cfg.LivePath, _cfg.CopyPath, ct);
-    }
-
-    public Task MirrorLiveToCopyAsync(CancellationToken ct, string? sourceOverride, string? destinationOverride)
-    {
-        var src = string.IsNullOrWhiteSpace(sourceOverride) ? _cfg.LivePath : sourceOverride;
-        var dst = string.IsNullOrWhiteSpace(destinationOverride) ? _cfg.CopyPath : destinationOverride;
-        return MirrorAsync(src, dst, ct);
-    }
-
-    private static Task MirrorAsync(string? src, string? dst, CancellationToken ct)
-    {
-        if (string.IsNullOrWhiteSpace(src) || string.IsNullOrWhiteSpace(dst))
+        await Task.Run(() =>
         {
-            return Task.CompletedTask;
-        }
-
-        if (Path.GetFullPath(src) == Path.GetFullPath(dst))
-        {
-            return Task.CompletedTask;
-        }
-
-        if (!Directory.Exists(src))
-        {
-            return Task.CompletedTask;
-        }
-
-        return Task.Run(() =>
-        {
-            static bool Exclude(string path)
+            EnsureDir(sp.PathCopy);
+            if (string.IsNullOrWhiteSpace(sp.PathLive) || !Directory.Exists(sp.PathLive))
             {
-                var normalized = path.Replace('\\', '/');
-                if (normalized.Contains("/.git/", StringComparison.OrdinalIgnoreCase)) return true;
-                if (normalized.EndsWith("/.git", StringComparison.OrdinalIgnoreCase)) return true;
-                if (normalized.EndsWith(".pack", StringComparison.OrdinalIgnoreCase)) return true;
-                if (normalized.EndsWith(".idx", StringComparison.OrdinalIgnoreCase)) return true;
-                return false;
+                log?.Report("✗ Live path not found.");
+                return;
             }
 
-            FileUtil.MirrorTree(src, dst, Exclude, ct);
+            log?.Report($"[copy] Live → Copy  ({sp.PathLive} → {sp.PathCopy})");
+            RobocopyMirror(sp.PathLive, sp.PathCopy, log, ct);
+            log?.Report("[copy] completed ✓");
         }, ct);
     }
 
-    public Task DeleteLiveAsync()
-        => DeleteDirectoryAsync(_cfg.LivePath);
-
-    public Task DeleteLiveAsync(string? path)
-        => DeleteDirectoryAsync(string.IsNullOrWhiteSpace(path) ? _cfg.LivePath : path);
-
-    public Task DeleteCopyAsync()
-        => DeleteDirectoryAsync(_cfg.CopyPath);
-
-    public Task DeleteCopyAsync(string? path)
-        => DeleteDirectoryAsync(string.IsNullOrWhiteSpace(path) ? _cfg.CopyPath : path);
-
-    private static Task DeleteDirectoryAsync(string? path)
+    public async Task BackupFromLiveAsync(ServerProfile sp, IProgress<string>? log, CancellationToken ct)
     {
-        if (!string.IsNullOrWhiteSpace(path))
+        await Task.Run(() =>
         {
-            FileUtil.ForceDeleteDirectory(path);
-        }
+            EnsureDir(sp.PathBackup);
+            if (string.IsNullOrWhiteSpace(sp.PathLive) || !Directory.Exists(sp.PathLive))
+            {
+                log?.Report("✗ Live path not found.");
+                return;
+            }
 
-        return Task.CompletedTask;
+            log?.Report($"[backup] Live → Backup  ({sp.PathLive} → {sp.PathBackup})");
+            RobocopyMirror(sp.PathLive, sp.PathBackup, log, ct);
+            log?.Report("[backup] completed ✓");
+        }, ct);
     }
 
-    public Task CreateBaseFoldersAsync(string root, ServerProfile? profile = null, CancellationToken ct = default)
+    public async Task RotateBackupAsync(ServerProfile sp, int keep = 5, IProgress<string>? log = null, CancellationToken ct = default)
     {
-        var live = Path.Combine(root, "Live", "azerothcore-wotlk");
-        var copy = Path.Combine(root, "Live_Copy", "azerothcore-wotlk-copy");
-        var backup = Path.Combine(root, "Backup");
-        var backupZip = Path.Combine(root, "BackupZip");
-
-        FileUtil.EnsureDirectory(live, hardenedForCurrentUser: true);
-        FileUtil.EnsureDirectory(copy, hardenedForCurrentUser: true);
-        FileUtil.EnsureDirectory(backup, hardenedForCurrentUser: true);
-        FileUtil.EnsureDirectory(backupZip, hardenedForCurrentUser: true);
-
-        if (profile is not null)
+        await Task.Run(() =>
         {
-            profile.PathLive = live;
-            profile.PathCopy = copy;
-            profile.PathBackup = backup;
-            profile.PathBackupZip = backupZip;
-        }
+            if (!Directory.Exists(sp.PathBackup))
+            {
+                log?.Report("ℹ backup folder does not exist — nothing to rotate.");
+                return;
+            }
 
-        _cfg.LivePath = live;
-        _cfg.CopyPath = copy;
-        _cfg.BackupRoot = backup;
-        _cfg.BackupZip = backupZip;
+            var entries = new DirectoryInfo(sp.PathBackup)
+                .GetDirectories()
+                .OrderByDescending(d => d.CreationTimeUtc)
+                .ToList();
 
-        return Task.CompletedTask;
+            for (int i = keep; i < entries.Count; i++)
+            {
+                if (ct.IsCancellationRequested) break;
+                try
+                {
+                    log?.Report($"[rotate] removing {entries[i].FullName}");
+                    entries[i].Delete(true);
+                }
+                catch (Exception ex)
+                {
+                    log?.Report($"[rotate] remove failed: {ex.Message}");
+                }
+            }
+        }, ct);
+    }
+
+    private static void RobocopyMirror(string source, string dest, IProgress<string>? log, CancellationToken ct)
+    {
+        // Robocopy spiegelt zuverlässig, auch große Bäume.
+        // /MIR spiegelt, /R:1 /W:1 reduziert Wartezeiten
+        var psi = new System.Diagnostics.ProcessStartInfo
+        {
+            FileName = "robocopy.exe",
+            Arguments = $"\"{source}\" \"{dest}\" /MIR /R:1 /W:1 /NFL /NDL /NP",
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true
+        };
+
+        using var p = System.Diagnostics.Process.Start(psi)!;
+        p.OutputDataReceived += (_, e) => { if (e.Data != null) log?.Report(e.Data); };
+        p.ErrorDataReceived += (_, e) => { if (e.Data != null) log?.Report(e.Data); };
+        p.BeginOutputReadLine();
+        p.BeginErrorReadLine();
+        p.WaitForExit();
     }
 }
