@@ -40,4 +40,13 @@ public partial class MainWindow : Window
     private void DeleteCopy_Click(object sender, RoutedEventArgs e) => _viewModel.DeleteCopy();
     private void Backup_Click(object sender, RoutedEventArgs e) => _viewModel.Backup();
     private void Rotate_Click(object sender, RoutedEventArgs e) => _viewModel.RotateBackup();
+
+    private void BrowseWorldExe_Click(object sender, RoutedEventArgs e) => _viewModel.BrowseWorldExe();
+    private void BrowseAuthExe_Click(object sender, RoutedEventArgs e) => _viewModel.BrowseAuthExe();
+    private void StartWorld_Click(object sender, RoutedEventArgs e) => _viewModel.StartWorld();
+    private void RestartWorld_Click(object sender, RoutedEventArgs e) => _viewModel.RestartWorld();
+    private void StopWorld_Click(object sender, RoutedEventArgs e) => _viewModel.StopWorld();
+    private void StartAuth_Click(object sender, RoutedEventArgs e) => _viewModel.StartAuth();
+    private void RestartAuth_Click(object sender, RoutedEventArgs e) => _viewModel.RestartAuth();
+    private void StopAuth_Click(object sender, RoutedEventArgs e) => _viewModel.StopAuth();
 }
