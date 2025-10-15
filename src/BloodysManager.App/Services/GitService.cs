@@ -1,61 +1,97 @@
-using LibGit2Sharp;
+using System;
 using System.IO;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using LibGit2Sharp;
 
 namespace BloodysManager.App.Services;
 
 public sealed class GitService
 {
-    public async Task<bool> CleanCloneToAsync(
-        string repoUrl,
-        string targetDir,
-        IProgress<string>? log,
-        CancellationToken ct)
+    private static void EnsureDirectory(string targetDir)
     {
-        return await Task.Run(() =>
+        if (!Directory.Exists(targetDir))
         {
-            try
-            {
-                if (Directory.Exists(targetDir))
-                {
-                    // Inhalt löschen, Ordner behalten
-                    foreach (var file in Directory.EnumerateFiles(targetDir, "*", SearchOption.AllDirectories))
-                        File.SetAttributes(file, FileAttributes.Normal);
-                    foreach (var dir in Directory.EnumerateDirectories(targetDir))
-                        Directory.Delete(dir, true);
-                    foreach (var file in Directory.EnumerateFiles(targetDir))
-                        File.Delete(file);
-                }
-                else
-                {
-                    Directory.CreateDirectory(targetDir);
-                }
+            Directory.CreateDirectory(targetDir);
+            return;
+        }
 
-                // WICHTIG: Progress gehört in FetchOptions, nicht direkt in CloneOptions
-                var opts = new CloneOptions
+        foreach (var file in Directory.EnumerateFiles(targetDir, "*", SearchOption.AllDirectories))
+        {
+            File.SetAttributes(file, FileAttributes.Normal);
+        }
+
+        foreach (var directory in Directory.EnumerateDirectories(targetDir))
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+
+        foreach (var file in Directory.EnumerateFiles(targetDir))
+        {
+            File.Delete(file);
+        }
+    }
+
+    public Task CloneAsync(string repoUrl, string targetDir, Action<string>? log)
+        => CloneAsync(repoUrl, targetDir, log, CancellationToken.None);
+
+    public Task CloneAsync(string repoUrl, string targetDir, Action<string>? log, CancellationToken cancellationToken)
+    {
+        return Task.Run(() =>
+        {
+            if (string.IsNullOrWhiteSpace(repoUrl))
+                throw new ArgumentException("Repository URL is empty.", nameof(repoUrl));
+            if (string.IsNullOrWhiteSpace(targetDir))
+                throw new ArgumentException("Target directory is empty.", nameof(targetDir));
+
+            log?.Invoke($"[git] clone {repoUrl} → {targetDir}");
+            EnsureDirectory(targetDir);
+
+            var options = new CloneOptions
+            {
+                FetchOptions = new FetchOptions
                 {
-                    FetchOptions = new FetchOptions
+                    TransferProgress = progress =>
                     {
-                        OnTransferProgress = progress =>
-                        {
-                            log?.Report($"[git] objects {progress.ReceivedObjects}/{progress.TotalObjects}, bytes {progress.ReceivedBytes}");
-                            return !ct.IsCancellationRequested;
-                        }
+                        log?.Invoke($"[git] objects {progress.ReceivedObjects}/{progress.TotalObjects} deltas {progress.ReceivedDeltas}");
+                        return !cancellationToken.IsCancellationRequested;
                     }
-                };
+                }
+            };
 
-                log?.Report($"[git] cloning {repoUrl} → {targetDir} ...");
-                Repository.Clone(repoUrl, targetDir, opts);
-                log?.Report("[git] clone completed ✓");
-                return true;
-            }
-            catch (Exception ex)
+            Repository.Clone(repoUrl, targetDir, options);
+            log?.Invoke("[git] clone completed");
+        }, cancellationToken);
+    }
+
+    public Task PullAsync(string workDir, Action<string>? log)
+        => PullAsync(workDir, log, CancellationToken.None);
+
+    public Task PullAsync(string workDir, Action<string>? log, CancellationToken cancellationToken)
+    {
+        return Task.Run(() =>
+        {
+            if (!Repository.IsValid(workDir))
+                throw new InvalidOperationException($"Not a git repository: {workDir}");
+
+            using var repo = new Repository(workDir);
+            var signature = new Signature("BloodysManager", "noreply@local", DateTimeOffset.Now);
+
+            var options = new PullOptions
             {
-                log?.Report($"[git] clone failed ✗  {ex.Message}");
-                return false;
-            }
-        }, ct);
+                FetchOptions = new FetchOptions
+                {
+                    TransferProgress = progress =>
+                    {
+                        log?.Invoke($"[git] fetch {progress.ReceivedObjects}/{progress.TotalObjects}");
+                        return !cancellationToken.IsCancellationRequested;
+                    }
+                }
+            };
+
+            log?.Invoke("[git] pull …");
+            var result = Commands.Pull(repo, signature, options);
+            log?.Invoke($"[git] pull result: {result.Status}");
+        }, cancellationToken);
     }
 }

@@ -46,7 +46,7 @@ public sealed class BackupService
             throw new InvalidOperationException("Paths not configured.");
 
         if (!Directory.Exists(copyPath))
-            await copy.MirrorLiveToCopyAsync(ct, _cfg.LivePath, copyPath);
+            await copy.MirrorLiveToCopyAsync(_cfg.LivePath, copyPath, log: null, ct);
 
         var tag = DateTime.Now.ToString("dd_MM_yy");
         string Base(string? suffix = null) => Path.Combine(archiveRoot, suffix is null ? $"Backup_{tag}" : $"Backup_{tag}_{suffix}");
@@ -65,7 +65,7 @@ public sealed class BackupService
                 var dst = baseName + ".7z";
                 var (c, _, e) = await shell.RunAsync(seven, $"a -t7z -mx=7 -mmt=on \"{dst}\" \"{copyPath}\\*\"", null, ct);
                 if (c != 0) throw new Exception($"7z failed: {e}");
-                await copy.MirrorLiveToCopyAsync(ct, _cfg.LivePath, copyPath);
+                await copy.MirrorLiveToCopyAsync(_cfg.LivePath, copyPath, log: null, ct);
                 return dst;
             }
             if (fmt == "rar" && rar is not null)
@@ -73,14 +73,14 @@ public sealed class BackupService
                 var dst = baseName + ".rar";
                 var (c, _, e) = await shell.RunAsync(rar, $"a -ep1 -m5 -r \"{dst}\" \"{copyPath}\\*\"", null, ct);
                 if (c != 0) throw new Exception($"rar failed: {e}");
-                await copy.MirrorLiveToCopyAsync(ct, _cfg.LivePath, copyPath);
+                await copy.MirrorLiveToCopyAsync(_cfg.LivePath, copyPath, log: null, ct);
                 return dst;
             }
             if (fmt == "zip")
             {
                 var dst = baseName + ".zip";
                 ZipFile.CreateFromDirectory(copyPath, dst, CompressionLevel.Optimal, includeBaseDirectory: false);
-                await copy.MirrorLiveToCopyAsync(ct, _cfg.LivePath, copyPath);
+                await copy.MirrorLiveToCopyAsync(_cfg.LivePath, copyPath, log: null, ct);
                 return dst;
             }
         }
