@@ -7,19 +7,22 @@ using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
-// using System.Windows.Forms; // WPF nutzt keinen WinForms-Dialog
+// using System.Windows.Forms; // WinForms-Dialoge nicht in WPF verwenden – verursacht Ambiguitäten
+using WinForms = System.Windows.Forms;
+using Win32 = Microsoft.Win32;
 using BloodysManager.App.Models;
 using BloodysManager.App.Services;
-using Microsoft.Win32;
 
-// WPF: explizit den WPF-Dateidialog verwenden
-// Beispiel (Pfad-/Dateiauswahl):
-// var dlg = new Microsoft.Win32.OpenFileDialog();
-// if (dlg.ShowDialog() == true) { /* dlg.FileName nutzen */ }
+// WPF-kompatibler Dateidialog (Beispiel an allen Stellen, an denen ein OpenFileDialog erzeugt wird):
+// var dlg = new Win32.OpenFileDialog();
+// if (dlg.ShowDialog() == true)
+// {
+//     var file = dlg.FileName;
+//     // ... weiterverarbeiten
+// }
 
-// Falls ein Folder-Browser benötigt wird, bitte den
-// CommonOpenFileDialog (Windows API Code Pack) oder einen
-// eigenen WPF-FolderPicker verwenden (nicht WinForms).
+// Falls Ordnerauswahl benötigt wird, bitte einen WPF-FolderPicker verwenden
+// (z. B. CommonOpenFileDialog aus Windows API Code Pack) – nicht WinForms.
 
 namespace BloodysManager.App.ViewModels;
 
@@ -277,7 +280,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     {
         var current = SelectedProfile;
         using var dialog = new InputBox("Rename Server", current.Name);
-        if (dialog.ShowDialog() == DialogResult.OK && !string.IsNullOrWhiteSpace(dialog.Value))
+        if (dialog.ShowDialog() == WinForms.DialogResult.OK && !string.IsNullOrWhiteSpace(dialog.Value))
         {
             current.Name = dialog.Value!;
             _configService.Save(Config);
@@ -288,12 +291,12 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     public void Browse(Func<ServerProfile, string> getter, Action<ServerProfile, string> setter)
     {
         var profile = SelectedProfile;
-        using var dialog = new FolderBrowserDialog { ShowNewFolderButton = true };
+        using var dialog = new WinForms.FolderBrowserDialog { ShowNewFolderButton = true };
         var initial = getter(profile);
         if (!string.IsNullOrWhiteSpace(initial) && Directory.Exists(initial))
             dialog.SelectedPath = initial;
 
-        if (dialog.ShowDialog() == DialogResult.OK && !string.IsNullOrWhiteSpace(dialog.SelectedPath))
+        if (dialog.ShowDialog() == WinForms.DialogResult.OK && !string.IsNullOrWhiteSpace(dialog.SelectedPath))
         {
             setter(profile, dialog.SelectedPath);
             _configService.Save(Config);
@@ -303,7 +306,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 
     public void BrowseWorldExe()
     {
-        var dialog = new OpenFileDialog
+        var dialog = new Win32.OpenFileDialog
         {
             Filter = "Executables (*.exe)|*.exe|All files (*.*)|*.*",
             FileName = string.IsNullOrWhiteSpace(WorldExePath) ? string.Empty : WorldExePath
@@ -318,7 +321,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 
     public void BrowseAuthExe()
     {
-        var dialog = new OpenFileDialog
+        var dialog = new Win32.OpenFileDialog
         {
             Filter = "Executables (*.exe)|*.exe|All files (*.*)|*.*",
             FileName = string.IsNullOrWhiteSpace(AuthExePath) ? string.Empty : AuthExePath
@@ -392,13 +395,13 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     public void CreateStructure()
     {
         var profile = SelectedProfile;
-        using var dialog = new FolderBrowserDialog
+        using var dialog = new WinForms.FolderBrowserDialog
         {
             ShowNewFolderButton = true,
             Description = "Choose root folder for server"
         };
 
-        if (dialog.ShowDialog() != DialogResult.OK || string.IsNullOrWhiteSpace(dialog.SelectedPath))
+        if (dialog.ShowDialog() != WinForms.DialogResult.OK || string.IsNullOrWhiteSpace(dialog.SelectedPath))
             return;
 
         var rootName = profile.Name.Replace(' ', '_');
@@ -550,32 +553,32 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     }
 }
 
-public sealed class InputBox : Form
+public sealed class InputBox : WinForms.Form
 {
     public string? Value => _textBox.Text;
-    private readonly TextBox _textBox = new() { Dock = DockStyle.Top };
+    private readonly WinForms.TextBox _textBox = new() { Dock = WinForms.DockStyle.Top };
 
     public InputBox(string title, string initial)
     {
         Text = title;
         Width = 400;
         Height = 140;
-        FormBorderStyle = FormBorderStyle.FixedDialog;
-        StartPosition = FormStartPosition.CenterParent;
+        FormBorderStyle = WinForms.FormBorderStyle.FixedDialog;
+        StartPosition = WinForms.FormStartPosition.CenterParent;
 
         Controls.Add(_textBox);
         _textBox.Text = initial;
 
-        var buttonPanel = new FlowLayoutPanel
+        var buttonPanel = new WinForms.FlowLayoutPanel
         {
-            FlowDirection = FlowDirection.RightToLeft,
-            Dock = DockStyle.Bottom,
-            Padding = new Padding(10),
+            FlowDirection = WinForms.FlowDirection.RightToLeft,
+            Dock = WinForms.DockStyle.Bottom,
+            Padding = new WinForms.Padding(10),
             Height = 50
         };
 
-        var ok = new Button { Text = "OK", DialogResult = DialogResult.OK, Width = 80 };
-        var cancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel, Width = 80 };
+        var ok = new WinForms.Button { Text = "OK", DialogResult = WinForms.DialogResult.OK, Width = 80 };
+        var cancel = new WinForms.Button { Text = "Cancel", DialogResult = WinForms.DialogResult.Cancel, Width = 80 };
         buttonPanel.Controls.Add(ok);
         buttonPanel.Controls.Add(cancel);
 
