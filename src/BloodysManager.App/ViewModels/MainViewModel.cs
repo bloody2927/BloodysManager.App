@@ -24,7 +24,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     private readonly GitService _gitService;
     private readonly FileOpsService _fileService;
     private readonly ProcessService _processService = new();
-    private readonly Timer _perfTimer;
+    private readonly System.Threading.Timer _perfTimer;
     private ProcessPerfSampler? _worldSampler;
     private ProcessPerfSampler? _authSampler;
 
@@ -183,7 +183,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 
         ResetWorldSampler();
         ResetAuthSampler();
-        _perfTimer = new Timer(UpdatePerf, null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
+        _perfTimer = new System.Threading.Timer(UpdatePerf, null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
     }
 
     private void OnProfileChanged(object? sender, PropertyChangedEventArgs e)
