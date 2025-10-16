@@ -61,11 +61,13 @@ public sealed class GitService
                 IsBare = false
             };
 
+            // Gemeinsames, versionssicheres Progress-Logging für LibGit2Sharp
             options.FetchOptions.OnTransferProgress = p =>
             {
+                // Nur Properties verwenden, die in allen Versionen garantiert existieren
                 log?.Report(
                     $"[git] recv {p.ReceivedObjects}/{p.TotalObjects} | " +
-                    $"idx {p.IndexedObjects} | local {p.LocalObjects} | bytes {p.ReceivedBytes}");
+                    $"idx {p.IndexedObjects} | bytes {p.ReceivedBytes}");
                 return !ct.IsCancellationRequested;
             };
 
@@ -112,11 +114,13 @@ public sealed class GitService
             var signature = new Signature("BloodysManager", "noreply@local", DateTimeOffset.Now);
             var options = new PullOptions();
 
+            // Gemeinsames, versionssicheres Progress-Logging für LibGit2Sharp
             options.FetchOptions.OnTransferProgress = p =>
             {
+                // Nur Properties verwenden, die in allen Versionen garantiert existieren
                 log?.Report(
                     $"[git] recv {p.ReceivedObjects}/{p.TotalObjects} | " +
-                    $"idx {p.IndexedObjects} | local {p.LocalObjects} | bytes {p.ReceivedBytes}");
+                    $"idx {p.IndexedObjects} | bytes {p.ReceivedBytes}");
                 return !ct.IsCancellationRequested;
             };
 
