@@ -61,9 +61,19 @@ public sealed class GitService
                 IsBare = false
             };
 
-            options.FetchOptions.OnTransferProgress = stats =>
+            // Korrektes Progress-Logging mit LibGit2Sharp.TransferProgress
+            // Verfügbare Properties u.a.:
+            //   progress.ReceivedObjects, progress.TotalObjects,
+            //   progress.IndexedObjects,  progress.LocalObjects,
+            //   progress.IndexedDeltas,   progress.TotalDeltas,
+            //   progress.ReceivedBytes
+            options.FetchOptions.OnTransferProgress = progress =>
             {
-                log?.Report($"[git] objects {stats.ReceivedObjects}/{stats.TotalObjects}  deltas {stats.ReceivedDeltas}");
+                // Kompakter, aussagekräftiger Status
+                log?.Report(
+                    $"[git] recv {progress.ReceivedObjects}/{progress.TotalObjects} " +
+                    $"(deltas {progress.IndexedDeltas}/{progress.TotalDeltas}, " +
+                    $"bytes {progress.ReceivedBytes})");
                 return !ct.IsCancellationRequested;
             };
 
@@ -110,9 +120,12 @@ public sealed class GitService
             var signature = new Signature("BloodysManager", "noreply@local", DateTimeOffset.Now);
             var options = new PullOptions();
 
-            options.FetchOptions.OnTransferProgress = stats =>
+            options.FetchOptions.OnTransferProgress = progress =>
             {
-                log?.Report($"[git] fetch {stats.ReceivedObjects}/{stats.TotalObjects}");
+                log?.Report(
+                    $"[git] recv {progress.ReceivedObjects}/{progress.TotalObjects} " +
+                    $"(deltas {progress.IndexedDeltas}/{progress.TotalDeltas}, " +
+                    $"bytes {progress.ReceivedBytes})");
                 return !ct.IsCancellationRequested;
             };
 

@@ -7,10 +7,19 @@ using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Windows.Forms;
+// using System.Windows.Forms; // WPF nutzt keinen WinForms-Dialog
 using BloodysManager.App.Models;
 using BloodysManager.App.Services;
 using Microsoft.Win32;
+
+// WPF: explizit den WPF-Dateidialog verwenden
+// Beispiel (Pfad-/Dateiauswahl):
+// var dlg = new Microsoft.Win32.OpenFileDialog();
+// if (dlg.ShowDialog() == true) { /* dlg.FileName nutzen */ }
+
+// Falls ein Folder-Browser benötigt wird, bitte den
+// CommonOpenFileDialog (Windows API Code Pack) oder einen
+// eigenen WPF-FolderPicker verwenden (nicht WinForms).
 
 namespace BloodysManager.App.ViewModels;
 
