@@ -30,6 +30,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 {
     public event PropertyChangedEventHandler? PropertyChanged;
     void Raise([CallerMemberName] string? name = null) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+    private void OnPropertyChanged(string propertyName) => Raise(propertyName);
 
     private readonly SynchronizationContext _syncContext;
     private readonly ConfigService _configService;
@@ -41,16 +42,23 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     private ProcessPerfSampler? _authSampler;
 
     public AppConfig Config { get; }
-    public ObservableCollection<string> Log { get; } = new();
-    public string LogText => string.Join(Environment.NewLine, Log);
+    // LogText ist eine read-only Property, die in der UI nur OneWay gebunden wird
+    private string _logText = string.Empty;
+    public string LogText => _logText;
+
+    // Methode zum Hinzufügen neuer Log-Zeilen aus Services (Git, FileOps etc.)
+    public void AppendLog(string line)
+    {
+        if (!string.IsNullOrEmpty(_logText))
+            _logText += Environment.NewLine;
+        _logText += line;
+        OnPropertyChanged(nameof(LogText));
+    }
     void Append(string message)
     {
         void Write()
         {
-            Log.Add($"[{DateTime.Now:HH:mm:ss}] {message}");
-            while (Log.Count > 500)
-                Log.RemoveAt(0);
-            Raise(nameof(LogText));
+            AppendLog($"[{DateTime.Now:HH:mm:ss}] {message}");
         }
 
         if (SynchronizationContext.Current == _syncContext)
