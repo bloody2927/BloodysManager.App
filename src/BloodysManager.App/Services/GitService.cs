@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using LibGit2Sharp;
@@ -42,36 +43,37 @@ public sealed class GitService
 
             log?.Report($"[git] clone → {targetDir}");
 
-            if (Directory.Exists(targetDir))
+            var fullTarget = Path.GetFullPath(targetDir);
+            var parent = Path.GetDirectoryName(fullTarget);
+            if (!string.IsNullOrEmpty(parent) && !Directory.Exists(parent))
             {
-                if (Repository.IsValid(targetDir))
+                Directory.CreateDirectory(parent);
+            }
+
+            if (Directory.Exists(fullTarget))
+            {
+                if (Repository.IsValid(fullTarget))
                 {
                     log?.Report("[git] target already contains a repository – skipping clone");
                     return;
                 }
-            }
-            else
-            {
-                Directory.CreateDirectory(targetDir);
+
+                if (Directory.EnumerateFileSystemEntries(fullTarget).Any())
+                    throw new IOException($"Target directory '{fullTarget}' already exists and is not empty.");
+
+                Directory.Delete(fullTarget);
             }
 
-            var options = new CloneOptions
+            var fetchOptions = new FetchOptions();
+            fetchOptions.OnTransferProgress = p =>
             {
-                RecurseSubmodules = true,
-                IsBare = false
-            };
-
-            // Gemeinsames, versionssicheres Progress-Logging für LibGit2Sharp
-            options.FetchOptions.OnTransferProgress = p =>
-            {
-                // Nur Properties verwenden, die in allen Versionen garantiert existieren
                 log?.Report(
                     $"[git] recv {p.ReceivedObjects}/{p.TotalObjects} | " +
                     $"idx {p.IndexedObjects} | bytes {p.ReceivedBytes}");
                 return !ct.IsCancellationRequested;
             };
 
-            options.FetchOptions.OnProgress = text =>
+            fetchOptions.OnProgress = text =>
             {
                 if (!string.IsNullOrWhiteSpace(text))
                 {
@@ -81,7 +83,14 @@ public sealed class GitService
                 return !ct.IsCancellationRequested;
             };
 
-            Repository.Clone(repoUrl, targetDir, options);
+            var options = new CloneOptions
+            {
+                RecurseSubmodules = true,
+                IsBare = false,
+                FetchOptions = fetchOptions
+            };
+
+            Repository.Clone(repoUrl, fullTarget, options);
             log?.Report("[git] clone done");
         }, ct);
     }
@@ -112,19 +121,18 @@ public sealed class GitService
 
             using var repo = new Repository(workDir);
             var signature = new Signature("BloodysManager", "noreply@local", DateTimeOffset.Now);
-            var options = new PullOptions();
+            var fetchOptions = new FetchOptions();
 
             // Gemeinsames, versionssicheres Progress-Logging für LibGit2Sharp
-            options.FetchOptions.OnTransferProgress = p =>
+            fetchOptions.OnTransferProgress = p =>
             {
-                // Nur Properties verwenden, die in allen Versionen garantiert existieren
                 log?.Report(
                     $"[git] recv {p.ReceivedObjects}/{p.TotalObjects} | " +
                     $"idx {p.IndexedObjects} | bytes {p.ReceivedBytes}");
                 return !ct.IsCancellationRequested;
             };
 
-            options.FetchOptions.OnProgress = text =>
+            fetchOptions.OnProgress = text =>
             {
                 if (!string.IsNullOrWhiteSpace(text))
                 {
@@ -132,6 +140,11 @@ public sealed class GitService
                 }
 
                 return !ct.IsCancellationRequested;
+            };
+
+            var options = new PullOptions
+            {
+                FetchOptions = fetchOptions
             };
 
             log?.Report("[git] pull …");

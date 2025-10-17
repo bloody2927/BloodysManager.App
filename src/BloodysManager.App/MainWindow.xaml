@@ -208,8 +208,9 @@
             </WrapPanel>
 
             <GroupBox Grid.Row="1" Header="Log">
+                <!-- Log-Ausgabe ist nur lesend → OneWay-Bindung reicht -->
                 <TextBox x:Name="LogBox"
-                         Text="{Binding LogText, Mode=OneWay}"
+                         Text="{Binding LogText, Mode=OneWay, UpdateSourceTrigger=PropertyChanged}"
                          Margin="8"
                          FontFamily="Consolas"
                          FontSize="12"
