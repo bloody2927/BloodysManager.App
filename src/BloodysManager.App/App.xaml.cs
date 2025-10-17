@@ -1,11 +1,12 @@
 using System;
 using System.Diagnostics;
 using System.Windows;
+// using System.Windows.Forms; // vermeiden, um Ambiguitäten in WPF zu verhindern
 using System.Windows.Threading;
 
 namespace BloodysManager.App
 {
-    public partial class App : Application
+    public partial class App : System.Windows.Application
     {
         protected override void OnStartup(StartupEventArgs e)
         {
@@ -42,5 +43,9 @@ namespace BloodysManager.App
             MessageBox.Show(e.ExceptionObject?.ToString() ?? "Unknown error", "Unhandled domain exception",
                 MessageBoxButton.OK, MessageBoxImage.Error);
         }
+
+        // Hinweis: Wenn in dieser Datei Application.Current genutzt wird,
+        // bitte explizit WPF adressieren:
+        // var app = System.Windows.Application.Current;
     }
 }
