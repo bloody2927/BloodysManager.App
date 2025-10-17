@@ -7,11 +7,12 @@ namespace BloodysManager.App;
 
 public partial class MainWindow : Window
 {
-    private readonly MainViewModel _viewModel = new();
+    private readonly MainViewModel _viewModel;
 
-    public MainWindow()
+    public MainWindow(MainViewModel? viewModel = null)
     {
         InitializeComponent();
+        _viewModel = viewModel ?? new MainViewModel();
         DataContext = _viewModel;
     }
 
