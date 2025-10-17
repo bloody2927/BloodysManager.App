@@ -7,6 +7,8 @@ using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
+// explizit WPF-Application; verhindert Konflikt mit WinForms.Application
+// var disp = System.Windows.Application.Current.Dispatcher;
 // using System.Windows.Forms; // WinForms-Dialoge nicht in WPF verwenden – verursacht Ambiguitäten
 using WinForms = System.Windows.Forms;
 using Win32 = Microsoft.Win32;

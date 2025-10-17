@@ -1,5 +1,7 @@
 using System;
 using System.Windows;
+// explizit WPF-Application referenzieren, um Ambiguitäten zu vermeiden
+// var app = System.Windows.Application.Current;
 using System.Windows.Controls;
 using BloodysManager.App.ViewModels;
 
