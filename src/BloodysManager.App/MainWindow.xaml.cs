@@ -1,5 +1,6 @@
 using System;
 using System.Windows;
+using System.Windows.Controls;
 using BloodysManager.App.ViewModels;
 
 namespace BloodysManager.App;
@@ -12,6 +13,14 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         DataContext = _viewModel;
+    }
+
+    private void LogBox_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        if (sender is TextBox tb)
+        {
+            tb.ScrollToEnd();
+        }
     }
 
     protected override void OnClosed(EventArgs e)

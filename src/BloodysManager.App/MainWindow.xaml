@@ -208,13 +208,15 @@
             </WrapPanel>
 
             <GroupBox Grid.Row="1" Header="Log">
-                <TextBox Text="{Binding LogText}"
+                <TextBox x:Name="LogBox"
+                         Text="{Binding LogText, Mode=OneWay}"
                          Margin="8"
                          FontFamily="Consolas"
                          FontSize="12"
                          AcceptsReturn="True"
                          IsReadOnly="True"
-                         VerticalScrollBarVisibility="Auto" />
+                         VerticalScrollBarVisibility="Auto"
+                         TextChanged="LogBox_TextChanged" />
             </GroupBox>
         </Grid>
 
