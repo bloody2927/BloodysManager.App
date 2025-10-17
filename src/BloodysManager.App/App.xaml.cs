@@ -21,7 +21,7 @@ namespace BloodysManager.App
             try
             {
                 var vm = new ViewModels.MainViewModel();
-                var win = new MainWindow { DataContext = vm };
+                var win = new MainWindow(vm);
                 win.Show();
             }
             catch (Exception ex)
