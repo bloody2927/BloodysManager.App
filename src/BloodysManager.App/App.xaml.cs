@@ -27,20 +27,20 @@ namespace BloodysManager.App
             }
             catch (Exception ex)
             {
-                MessageBox.Show(ex.ToString(), "Startup error", MessageBoxButton.OK, MessageBoxImage.Error);
+                System.Windows.MessageBox.Show(ex.ToString(), "Startup error", MessageBoxButton.OK, MessageBoxImage.Error);
                 Shutdown(-1);
             }
         }
 
         private void App_DispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)
         {
-            MessageBox.Show(e.Exception.ToString(), "Unhandled UI exception", MessageBoxButton.OK, MessageBoxImage.Error);
+            System.Windows.MessageBox.Show(e.Exception.ToString(), "Unhandled UI exception", MessageBoxButton.OK, MessageBoxImage.Error);
             e.Handled = true; // verhindert Sofort-Absturz, damit man Log/Output lesen kann
         }
 
         private void CurrentDomain_UnhandledException(object? sender, UnhandledExceptionEventArgs e)
         {
-            MessageBox.Show(e.ExceptionObject?.ToString() ?? "Unknown error", "Unhandled domain exception",
+            System.Windows.MessageBox.Show(e.ExceptionObject?.ToString() ?? "Unknown error", "Unhandled domain exception",
                 MessageBoxButton.OK, MessageBoxImage.Error);
         }
 
