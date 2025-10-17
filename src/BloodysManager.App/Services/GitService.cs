@@ -14,10 +14,10 @@ namespace BloodysManager.App.Services;
 /// </summary>
 public sealed class GitService
 {
-    public Task CloneAsync(string repoUrl, string targetDir, Action<string>? log)
+    public Task CloneAsync(string repoUrl, string targetDir, global::System.Action<string>? log)
         => CloneAsync(repoUrl, targetDir, log, CancellationToken.None);
 
-    public Task CloneAsync(string repoUrl, string targetDir, Action<string>? log, CancellationToken ct)
+    public Task CloneAsync(string repoUrl, string targetDir, global::System.Action<string>? log, CancellationToken ct)
         => CloneAsync(repoUrl, targetDir, log is null ? null : new Progress<string>(log), ct);
 
     public Task CloneAsync(string repoUrl, string targetDir, IProgress<string>? log)
@@ -95,10 +95,10 @@ public sealed class GitService
         }, ct);
     }
 
-    public Task PullAsync(string workDir, Action<string>? log)
+    public Task PullAsync(string workDir, global::System.Action<string>? log)
         => PullAsync(workDir, log, CancellationToken.None);
 
-    public Task PullAsync(string workDir, Action<string>? log, CancellationToken ct)
+    public Task PullAsync(string workDir, global::System.Action<string>? log, CancellationToken ct)
         => PullAsync(workDir, log is null ? null : new Progress<string>(log), ct);
 
     public Task PullAsync(string workDir, IProgress<string>? log)
