@@ -298,7 +298,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         }
     }
 
-    public void Browse(Func<ServerProfile, string> getter, Action<ServerProfile, string> setter)
+    public void Browse(global::System.Func<ServerProfile, string> getter, global::System.Action<ServerProfile, string> setter)
     {
         var profile = SelectedProfile;
         using var dialog = new WinForms.FolderBrowserDialog { ShowNewFolderButton = true };
@@ -362,7 +362,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     public void RestartAuth()
         => ExecuteProcessAction(() => _processService.Restart(AuthExePath, Append));
 
-    private void ExecuteProcessAction(Action action)
+    private void ExecuteProcessAction(global::System.Action action)
     {
         try
         {

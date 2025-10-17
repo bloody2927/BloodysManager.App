@@ -6,7 +6,7 @@ namespace BloodysManager.App.Services;
 
 public sealed class ProcessService
 {
-    public Process? StartExe(string exePath, Action<string>? log = null)
+    public Process? StartExe(string exePath, global::System.Action<string>? log = null)
     {
         if (string.IsNullOrWhiteSpace(exePath) || !File.Exists(exePath))
             throw new FileNotFoundException("Executable not found", exePath);
@@ -23,7 +23,7 @@ public sealed class ProcessService
         return process;
     }
 
-    public bool StopByPath(string exePath, Action<string>? log = null)
+    public bool StopByPath(string exePath, global::System.Action<string>? log = null)
     {
         var name = Path.GetFileNameWithoutExtension(exePath);
         if (string.IsNullOrWhiteSpace(name))
@@ -50,7 +50,7 @@ public sealed class ProcessService
         return any;
     }
 
-    public Process? Restart(string exePath, Action<string>? log = null)
+    public Process? Restart(string exePath, global::System.Action<string>? log = null)
     {
         StopByPath(exePath, log);
         return StartExe(exePath, log);

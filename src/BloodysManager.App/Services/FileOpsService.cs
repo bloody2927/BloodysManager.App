@@ -12,7 +12,7 @@ public sealed class FileOpsService
             Directory.CreateDirectory(path);
     }
 
-    public void CopyDirectoryContents(string src, string dst, Action<string>? log = null)
+    public void CopyDirectoryContents(string src, string dst, global::System.Action<string>? log = null)
     {
         if (!Directory.Exists(src))
             throw new DirectoryNotFoundException($"Source directory not found: {src}");
@@ -28,7 +28,7 @@ public sealed class FileOpsService
         }
     }
 
-    public void DeleteDirectoryContents(string path, Action<string>? log = null)
+    public void DeleteDirectoryContents(string path, global::System.Action<string>? log = null)
     {
         if (!Directory.Exists(path))
             return;
@@ -47,7 +47,7 @@ public sealed class FileOpsService
         }
     }
 
-    public string SnapshotToBackup(string livePath, string backupPath, Action<string>? log = null)
+    public string SnapshotToBackup(string livePath, string backupPath, global::System.Action<string>? log = null)
     {
         if (!Directory.Exists(livePath))
             throw new DirectoryNotFoundException($"Live path not found: {livePath}");
@@ -61,7 +61,7 @@ public sealed class FileOpsService
         return target;
     }
 
-    public void RotateBackups(string backupPath, int keep = 5, Action<string>? log = null)
+    public void RotateBackups(string backupPath, int keep = 5, global::System.Action<string>? log = null)
     {
         if (!Directory.Exists(backupPath))
             return;
